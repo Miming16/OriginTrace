@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 
-const API = 'http://localhost:8000'
+const API = '/api'
 
 const BAND_STYLE = {
   Low:    { box: 'bg-emerald-500/15 border-emerald-500 text-emerald-300', dot: 'bg-emerald-400' },
@@ -44,7 +44,7 @@ export default function App() {
         setRightSubmissionId((current) => current || String(data[1]?.id || data[0].id))
       }
     } catch (e) {
-      setError(`Could not load stored submissions. Is the backend running on ${API}? (${e.message})`)
+      setError(`Could not load stored submissions. Is the backend running? (${e.message})`)
     } finally {
       setLoadingSubmissions(false)
     }
@@ -67,7 +67,7 @@ export default function App() {
       if (!res.ok) throw new Error(`Server responded ${res.status}`)
       setResult(await res.json())
     } catch (e) {
-      setError(`Could not run the self-check. Is the backend running on ${API}? (${e.message})`)
+      setError(`Could not run the self-check. Is the backend running? (${e.message})`)
     } finally {
       setLoading(false)
     }
@@ -93,7 +93,7 @@ export default function App() {
         await loadSubmissions()
       }
     } catch (e) {
-      setError(`Could not reach the API. Is the backend running on ${API}? (${e.message})`)
+      setError(`Could not reach the API. Is the backend running? (${e.message})`)
     } finally {
       setLoading(false)
     }
@@ -114,7 +114,7 @@ export default function App() {
       if (!res.ok) throw new Error(`Server responded ${res.status}`)
       setCompareResult(await res.json())
     } catch (e) {
-      setError(`Could not compare stored submissions. Is the backend running on ${API}? (${e.message})`)
+      setError(`Could not compare stored submissions. Is the backend running? (${e.message})`)
     } finally {
       setLoading(false)
     }
