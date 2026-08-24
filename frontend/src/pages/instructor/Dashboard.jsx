@@ -1,8 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 
-// Mock data — shape matches what 7.5 (Instructor Dashboard API Integration)
-// will eventually fetch from the real backend.
 const SUBMISSIONS = [
   { id: 1, name: 'E. Winters', course: 'CS302', assignment: 'Project 2', lang: 'Java', risk: 'High', flags: 4, time: '2d ago' },
   { id: 2, name: 'S. Connor', course: 'CS101', assignment: 'Lab 5', lang: 'Python', risk: 'Medium', flags: 1, time: '4h ago' },
