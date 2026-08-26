@@ -1,12 +1,21 @@
 import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import ExtractedFileSummary from '../../components/ExtractedFileSummary';
 
-// Mock data — shape matches what 7.5 (Instructor Dashboard API Integration)
-// will eventually fetch from the real backend.
+
 const SUBMISSIONS = [
-  { id: 1, name: 'E. Winters', course: 'CS302', assignment: 'Project 2', lang: 'Java', risk: 'High', flags: 4, time: '2d ago' },
-  { id: 2, name: 'S. Connor', course: 'CS101', assignment: 'Lab 5', lang: 'Python', risk: 'Medium', flags: 1, time: '4h ago' },
-  { id: 3, name: 'A. Adams', course: 'CS205', assignment: 'Assignment 3', lang: 'JavaScript', risk: 'Low', flags: 0, time: '1d ago' },
+  {
+    id: 1, name: 'E. Winters', course: 'CS302', assignment: 'Project 2', lang: 'Java', risk: 'High', flags: 4, time: '2d ago',
+    fileSummary: { includedCount: 18, excludedBreakdown: [{ reason: 'node_modules', count: 112 }, { reason: 'vendor', count: 6 }] },
+  },
+  {
+    id: 2, name: 'S. Connor', course: 'CS101', assignment: 'Lab 5', lang: 'Python', risk: 'Medium', flags: 1, time: '4h ago',
+    fileSummary: { includedCount: 6, excludedBreakdown: [{ reason: '__pycache__', count: 3 }] },
+  },
+  {
+    id: 3, name: 'A. Adams', course: 'CS205', assignment: 'Assignment 3', lang: 'JavaScript', risk: 'Low', flags: 0, time: '1d ago',
+    fileSummary: { includedCount: 9, excludedBreakdown: [] },
+  },
 ];
 
 const NAV_ITEMS = [
@@ -105,7 +114,8 @@ export default function InstructorDashboard() {
             <p className="text-sm text-slate-text-muted">Select a submission above to view details.</p>
           ) : (
             <>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <ExtractedFileSummary summary={selected.fileSummary} />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
                 <div className="p-3 border border-dashed border-border-standard rounded-lg text-xs text-slate-text-muted">
                   Matched fragments — pending 3.2 / 7.2
                 </div>

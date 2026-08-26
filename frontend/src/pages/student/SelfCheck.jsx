@@ -1,8 +1,13 @@
 import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import ExtractedFileSummary from '../../components/ExtractedFileSummary';
 
-// Mock quota — real limit comes from 6.4 (Rate-Limiting for Student Self-Checks)
 const QUOTA = { used: 1, limit: 3 };
+
+const MOCK_FILE_SUMMARY = {
+  includedCount: 7,
+  excludedBreakdown: [{ reason: 'node_modules', count: 84 }],
+};
 
 export default function StudentSelfCheck() {
   const { user, logout } = useAuth();
@@ -15,7 +20,6 @@ export default function StudentSelfCheck() {
     e.preventDefault();
     if (remaining <= 0) return;
     setResult('checking');
-    // No backend yet — 3.5 (Submission API) and 8.3 wire this up for real.
     setTimeout(() => setResult({ band: 'low' }), 1200);
   }
 
@@ -76,6 +80,9 @@ export default function StudentSelfCheck() {
           ) : (
             <>
               <span className={bandStyles[result.band].badge}>{bandStyles[result.band].label}</span>
+              <div className="mt-3 text-left">
+                <ExtractedFileSummary summary={MOCK_FILE_SUMMARY} />
+              </div>
               <p className="text-[11px] text-slate-text-muted mt-3 border-t border-border-standard pt-3">
                 Real risk band + guidance shown here once 3.5 / 8.2 are wired up.
                 Only the aggregate result will ever appear — no matched files or peer names.
