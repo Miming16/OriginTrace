@@ -1,7 +1,10 @@
 import { useState } from 'react';
 import ExtractedFileSummary from '../../components/ExtractedFileSummary';
+import FlagPanel from '../../components/FlagPanel';
+import OriginalityCallPanel from '../../components/OriginalityCallPanel';
 import SubmissionListView from './SubmissionListView';
 import { SUBMISSIONS } from './mockSubmissions';
+import { getFlagsFor } from './mockFlags';
 
 const RISK_META = {
   Low: { cls: 'low', text: 'text-risk-low' },
@@ -18,7 +21,18 @@ const KPI = [
 
 export default function InstructorDashboard() {
   const [selectedId, setSelectedId] = useState(null);
+  const [decisions, setDecisions] = useState({}); // { [submissionId]: { value, decidedAt } }
+
   const selected = SUBMISSIONS.find((s) => s.id === selectedId);
+  const flags = selected ? getFlagsFor(selected.id) : [];
+  const decision = selected ? decisions[selected.id] : null;
+
+  function handleDecide(value) {
+    setDecisions((prev) => ({
+      ...prev,
+      [selected.id]: { value, decidedAt: new Date().toISOString() },
+    }));
+  }
 
   return (
     <div>
@@ -40,26 +54,27 @@ export default function InstructorDashboard() {
         ) : (
           <>
             <ExtractedFileSummary summary={selected.fileSummary} />
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+
+            <div className="mt-4">
+              <h6 className="text-xs font-bold uppercase text-slate-text-muted mb-2">
+                Commit-pattern & provenance flags
+              </h6>
+              <FlagPanel flags={flags} />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
               <div className="p-3 border border-dashed border-border-standard rounded-lg text-xs text-slate-text-muted">
                 Matched fragments — see Clusters for side-by-side comparisons (7.2)
-              </div>
-              <div className="p-3 border border-dashed border-border-standard rounded-lg text-xs text-slate-text-muted">
-                Peer overlaps — pending 6.2 / 7.2
-              </div>
-              <div className="p-3 border border-dashed border-border-standard rounded-lg text-xs text-slate-text-muted">
-                Commit / provenance flags — pending 4.x / 5.x / 7.3
               </div>
               <div className={`p-3 border border-dashed border-border-standard rounded-lg text-xs font-bold ${RISK_META[selected.risk].text}`}>
                 Risk band: {selected.risk} — pending 6.3
               </div>
             </div>
-            <div className="flex gap-2 mt-4">
-              <button disabled className="px-4 py-2 rounded-lg text-sm font-bold border border-border-standard text-slate-text-muted">Clear</button>
-              <button disabled className="px-4 py-2 rounded-lg text-sm font-bold border border-border-standard text-slate-text-muted">Flag for review</button>
-              <button disabled className="px-4 py-2 rounded-lg text-sm font-bold border border-border-standard text-slate-text-muted">Mark under review</button>
+
+            <div className="mt-5 pt-4 border-t border-border-standard">
+              <h6 className="text-xs font-bold uppercase text-slate-text-muted mb-2">Final originality call</h6>
+              <OriginalityCallPanel decision={decision} onDecide={handleDecide} />
             </div>
-            <p className="text-[11px] text-slate-text-muted mt-2">Final-call actions wired up in 7.4.</p>
           </>
         )}
       </div>
