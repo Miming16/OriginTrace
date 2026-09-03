@@ -2,9 +2,11 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import ProtectedRoute from './routes/ProtectedRoute';
 
-// Stubs for now — built out in 1.5.1 (login) and 3.3 / 3.4 (dashboards).
 import LoginPage from './pages/LoginPage';
+import InstructorLayout from './pages/instructor/InstructorLayout';
 import InstructorDashboard from './pages/instructor/Dashboard';
+import ClusterListView from './pages/instructor/ClusterListView';
+import ClusterDetailView from './pages/instructor/ClusterDetailView';
 import StudentSelfCheck from './pages/student/SelfCheck';
 import AdminPanel from './pages/admin/AdminPanel';
 
@@ -16,13 +18,17 @@ export default function App() {
           <Route path="/login" element={<LoginPage />} />
 
           <Route
-            path="/instructor/*"
+            path="/instructor"
             element={
               <ProtectedRoute allowedRoles={['instructor']}>
-                <InstructorDashboard />
+                <InstructorLayout />
               </ProtectedRoute>
             }
-          />
+          >
+            <Route index element={<InstructorDashboard />} />
+            <Route path="clusters" element={<ClusterListView />} />
+            <Route path="clusters/:clusterId" element={<ClusterDetailView />} />
+          </Route>
 
           <Route
             path="/student/*"
