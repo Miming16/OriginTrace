@@ -1,33 +1,11 @@
 import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import ExtractedFileSummary from '../../components/ExtractedFileSummary';
-
-const QUOTA = { used: 1, limit: 3 };
-
-const MOCK_FILE_SUMMARY = {
-  includedCount: 7,
-  excludedBreakdown: [{ reason: 'node_modules', count: 84 }],
-};
+import SelfCheckForm from './SelfCheckForm';
+import AggregateResultDisplay from '../../components/AggregateResultDisplay';
 
 export default function StudentSelfCheck() {
   const { user, logout } = useAuth();
-  const [repoUrl, setRepoUrl] = useState('');
-  const [result, setResult] = useState(null); // null | 'checking' | { band }
-
-  const remaining = QUOTA.limit - QUOTA.used;
-
-  function handleSubmit(e) {
-    e.preventDefault();
-    if (remaining <= 0) return;
-    setResult('checking');
-    setTimeout(() => setResult({ band: 'low' }), 1200);
-  }
-
-  const bandStyles = {
-    low: { badge: 'risk-badge low', label: 'LOW' },
-    medium: { badge: 'risk-badge medium', label: 'MEDIUM' },
-    high: { badge: 'risk-badge high', label: 'HIGH' },
-  };
+  const [result, setResult] = useState(null); // { band: 'low' | 'medium' | 'high' } | null
 
   return (
     <div className="min-h-screen bg-background text-primary">
@@ -42,53 +20,11 @@ export default function StudentSelfCheck() {
       </div>
 
       <div className="max-w-md mx-auto p-6">
-        <div className="bg-white border border-border-standard rounded-xl p-6 shadow-sm">
-          <h3 className="font-bold text-lg mb-1">Self-check submission</h3>
-          <p className="text-xs text-slate-text-muted mb-4">{remaining} of {QUOTA.limit} checks remaining today</p>
+        <SelfCheckForm onComplete={setResult} />
 
-          <form onSubmit={handleSubmit} className="space-y-3">
-            <div>
-              <label className="text-xs font-semibold text-slate-text-secondary block mb-1">Git repo URL</label>
-              <input
-                type="text"
-                value={repoUrl}
-                onChange={(e) => setRepoUrl(e.target.value)}
-                placeholder="https://github.com/..."
-                className="w-full border border-border-standard rounded-lg px-3 py-2 text-sm"
-              />
-            </div>
-            <p className="text-xs text-slate-text-muted text-center">or</p>
-            <div className="border-2 border-dashed border-border-standard rounded-lg p-6 text-center text-xs text-slate-text-muted">
-              Drop file / browse to upload
-            </div>
-            <button
-              type="submit"
-              disabled={remaining <= 0 || result === 'checking'}
-              className="w-full bg-secondary text-white py-2.5 rounded-lg text-sm font-bold hover:opacity-90 transition disabled:opacity-50"
-            >
-              {result === 'checking' ? 'Analyzing…' : 'Run self-check'}
-            </button>
-          </form>
-        </div>
-
-        <div className="mt-6 bg-white border border-border-standard rounded-xl p-6 shadow-sm text-center">
+        <div className="mt-6">
           <h3 className="font-bold text-sm mb-3">Result</h3>
-          {!result || result === 'checking' ? (
-            <p className="text-sm text-slate-text-muted">
-              {result === 'checking' ? 'Processing…' : 'No submission yet.'}
-            </p>
-          ) : (
-            <>
-              <span className={bandStyles[result.band].badge}>{bandStyles[result.band].label}</span>
-              <div className="mt-3 text-left">
-                <ExtractedFileSummary summary={MOCK_FILE_SUMMARY} />
-              </div>
-              <p className="text-[11px] text-slate-text-muted mt-3 border-t border-border-standard pt-3">
-                Real risk band + guidance shown here once 3.5 / 8.2 are wired up.
-                Only the aggregate result will ever appear — no matched files or peer names.
-              </p>
-            </>
-          )}
+          <AggregateResultDisplay band={result?.band} />
         </div>
       </div>
     </div>
