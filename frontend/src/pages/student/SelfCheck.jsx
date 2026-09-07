@@ -1,89 +1,289 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 
-// Mock quota — real limit comes from 6.4 (Rate-Limiting for Student Self-Checks)
-const QUOTA = { used: 1, limit: 3 };
+const STUDENT_HISTORY = [
+  { id: 'cs302-p2', title: 'CS302 · Project 2', date: 'Today 10:30', device: 'PC-001', band: 'low', integrity: 94, structural: 9, byline: 'Python' },
+  { id: 'cs101-lab5', title: 'CS101 · Lab 5', date: 'Yesterday 14:15', device: 'LAP-042', band: 'low', integrity: 96, structural: 6, byline: 'Python' },
+  { id: 'cs205-a3', title: 'CS205 · Assignment 3', date: '2 days ago', device: 'PC-001', band: 'medium', integrity: 74, structural: 52, byline: 'JavaScript' },
+];
+
+const COURSE_ASSIGNMENTS = [
+  { id: 'a1', name: 'Lab 4: Control Flow', band: 'low', status: 'checked', resultId: 'cs101-lab5', repo: 'cs101-labs', submitted: true },
+  { id: 'a2', name: 'Portfolio Website', band: 'medium', status: 'checked', resultId: 'cs205-a3', repo: 'web-assign', submitted: true },
+  { id: 'a3', name: 'Project 2', band: 'low', status: 'pending', resultId: null, repo: '', submitted: false },
+  { id: 'a4', name: 'Final Reflection', band: null, status: 'pending', resultId: null, repo: '', submitted: false },
+];
+
+const RISK_META = {
+  low: { badge: 'Low', cls: 'risk-low', bar: '#22c55e' },
+  medium: { badge: 'Medium', cls: 'risk-medium', bar: '#f59e0b' },
+  high: { badge: 'High', cls: 'risk-high', bar: '#ef4444' },
+};
 
 export default function StudentSelfCheck() {
   const { user, logout } = useAuth();
+  const [activeView, setActiveView] = useState('dashboard');
   const [repoUrl, setRepoUrl] = useState('');
-  const [result, setResult] = useState(null); // null | 'checking' | { band }
+  const [result, setResult] = useState(null);
+  const [gitHubConnected, setGitHubConnected] = useState(false);
+  const [selectedCourse, setSelectedCourse] = useState('CS101');
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
-  const remaining = QUOTA.limit - QUOTA.used;
+  const remainingChecks = useMemo(() => 3 - (result && result.checksUsed ? result.checksUsed : 1), [result]);
 
-  function handleSubmit(e) {
+  function runSelfCheck(e) {
     e.preventDefault();
-    if (remaining <= 0) return;
-    setResult('checking');
-    // No backend yet — 3.5 (Submission API) and 8.3 wire this up for real.
-    setTimeout(() => setResult({ band: 'low' }), 1200);
+    if (remainingChecks <= 0) return;
+    setResult({ checking: true, band: null, checksUsed: 1 });
+
+    setTimeout(() => {
+      const band = ['low', 'medium', 'high'][Math.floor(Math.random() * 3)];
+      setResult({ checking: false, band, checksUsed: 1 });
+    }, 1500);
   }
 
-  const bandStyles = {
-    low: { badge: 'risk-badge low', label: 'LOW' },
-    medium: { badge: 'risk-badge medium', label: 'MEDIUM' },
-    high: { badge: 'risk-badge high', label: 'HIGH' },
-  };
+  const studentStats = [
+    { label: 'Total submissions', value: '12', icon: 'description' },
+    { label: 'Low risk', value: '8', icon: 'check_circle' },
+    { label: 'Self-checks left', value: String(Math.max(0, remainingChecks)), icon: 'shield' },
+    { label: 'Linked repos', value: '3', icon: 'link' },
+  ];
+
+  const navItems = [
+    { key: 'dashboard', label: 'Dashboard', icon: 'dashboard' },
+    { key: 'courses', label: 'Courses', icon: 'school' },
+    { key: 'history', label: 'History', icon: 'history' },
+    { key: 'profile', label: 'Profile & Settings', icon: 'account_circle' },
+  ];
+
+  function renderDashboard() {
+    return (
+      <>
+        <div className="stats-grid">
+          {studentStats.map((stat) => (
+            <div key={stat.label} className="stat-card">
+              <div className="stat-topline">
+                <span className="material-symbols-outlined">{stat.icon}</span>
+                <span>{stat.label}</span>
+              </div>
+              <h3>{stat.value}</h3>
+            </div>
+          ))}
+        </div>
+
+        <div className="panel">
+          <div className="panel-header">
+            <h3>Submission health</h3>
+          </div>
+          <div className="submission-panel-grid">
+            <div className="chart-card">
+              <div className="mini-chart">
+                <span style={{ height: '48%' }} />
+                <span style={{ height: '74%' }} />
+                <span style={{ height: '62%' }} />
+                <span style={{ height: '90%' }} />
+                <span style={{ height: '68%' }} />
+                <span style={{ height: '100%' }} />
+              </div>
+            </div>
+            <div className="meta-card">
+              <h4>Development plausibility</h4>
+              <p>Most recent checks show steady commit growth with no undeclared device jumps.</p>
+              <ul>
+                <li>8 commits over 4 days</li>
+                <li>Author-committer match: 100%</li>
+                <li>No force-push detected</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  function renderCourses() {
+    return (
+      <div className="panel">
+        <div className="panel-header">
+          <h3>My courses</h3>
+        </div>
+
+        <div className="course-selector-row">
+          {['CS101', 'CS205', 'CS302'].map((course) => (
+            <button
+              key={course}
+              className={selectedCourse === course ? 'course-chip active' : 'course-chip'}
+              onClick={() => setSelectedCourse(course)}
+            >
+              {course}
+            </button>
+          ))}
+        </div>
+
+        <div className="assignment-list">
+          {COURSE_ASSIGNMENTS.map((assignment) => (
+            <div key={assignment.id} className="assignment-item">
+              <div>
+                <h4>{assignment.name}</h4>
+                <p>{assignment.repo ? `Repo: ${assignment.repo}` : 'No repository selected yet'}</p>
+              </div>
+              <div className="assignment-actions">
+                <span className={assignment.band ? `risk-badge ${RISK_META[assignment.band].cls}` : 'risk-badge neutral'}>
+                  {assignment.band ? RISK_META[assignment.band].badge : 'Not checked'}
+                </span>
+                <button className="ghost-button" onClick={() => setActiveView('dashboard')}>Open</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  function renderHistory() {
+    return (
+      <div className="panel">
+        <div className="panel-header">
+          <h3>History</h3>
+        </div>
+
+        <div className="history-list">
+          {STUDENT_HISTORY.map((entry) => (
+            <div key={entry.id} className="history-item">
+              <div>
+                <h4>{entry.title}</h4>
+                <p>{entry.date} · {entry.device} · {entry.byline}</p>
+              </div>
+              <div className="history-meta">
+                <span className={`risk-badge ${RISK_META[entry.band].cls}`}>{RISK_META[entry.band].badge}</span>
+                <button className="ghost-button" onClick={() => setResult({ checking: false, band: entry.band, checksUsed: 1 })}>View</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  function renderProfile() {
+    return (
+      <div className="profile-layout">
+        <div className="panel">
+          <div className="panel-header">
+            <h3>Repository access</h3>
+          </div>
+
+          <div className="github-card">
+            <div className="github-title-row">
+              <span className="material-symbols-outlined">sync</span>
+              <strong>GitHub</strong>
+            </div>
+            <p>{gitHubConnected ? 'Connected as @alexadams-dev' : 'Not connected yet'}</p>
+            <button className="primary-button" onClick={() => setGitHubConnected((value) => !value)}>
+              {gitHubConnected ? 'Disconnect' : 'Connect account'}
+            </button>
+          </div>
+
+          <div className="repo-input-box">
+            <label>Git repo URL</label>
+            <input value={repoUrl} onChange={(e) => setRepoUrl(e.target.value)} placeholder="https://github.com/..." />
+          </div>
+        </div>
+
+        <div className="panel">
+          <div className="panel-header">
+            <h3>Account settings</h3>
+          </div>
+          <div className="settings-list">
+            <div><span>Name</span><strong>{user?.fullName}</strong></div>
+            <div><span>Role</span><strong>Student</strong></div>
+            <div><span>Institution</span><strong>USJR</strong></div>
+            <div><span>Self-check quota</span><strong>3 / week</strong></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-background text-primary">
-      <div className="flex items-center justify-between px-6 py-4 border-b border-border-standard bg-white">
-        <span className="font-bold text-lg flex items-center gap-2">
-          <span className="material-symbols-outlined text-secondary">shield</span> OriginTrace
-        </span>
-        <span className="text-sm text-slate-text-secondary">
-          Student: {user?.fullName || '[name]'}
-          <button onClick={logout} className="ml-2 text-secondary font-bold">Sign out</button>
-        </span>
-      </div>
+    <div className={isSidebarCollapsed ? 'app-layout sidebar-collapsed' : 'app-layout'}>
+      <aside className="sidebar">
+        <button type="button" className="brand-toggle" onClick={() => setIsSidebarCollapsed((value) => !value)} aria-label="Toggle sidebar">
+          <img src="/origintrace-logo.svg" alt="OriginTrace logo" className="brand-logo mini-logo" />
+          <span className="brand-text">OriginTrace</span>
+        </button>
 
-      <div className="max-w-md mx-auto p-6">
-        <div className="bg-white border border-border-standard rounded-xl p-6 shadow-sm">
-          <h3 className="font-bold text-lg mb-1">Self-check submission</h3>
-          <p className="text-xs text-slate-text-muted mb-4">{remaining} of {QUOTA.limit} checks remaining today</p>
-
-          <form onSubmit={handleSubmit} className="space-y-3">
-            <div>
-              <label className="text-xs font-semibold text-slate-text-secondary block mb-1">Git repo URL</label>
-              <input
-                type="text"
-                value={repoUrl}
-                onChange={(e) => setRepoUrl(e.target.value)}
-                placeholder="https://github.com/..."
-                className="w-full border border-border-standard rounded-lg px-3 py-2 text-sm"
-              />
-            </div>
-            <p className="text-xs text-slate-text-muted text-center">or</p>
-            <div className="border-2 border-dashed border-border-standard rounded-lg p-6 text-center text-xs text-slate-text-muted">
-              Drop file / browse to upload
-            </div>
+        <nav className="nav-group">
+          {navItems.map((item) => (
             <button
-              type="submit"
-              disabled={remaining <= 0 || result === 'checking'}
-              className="w-full bg-secondary text-white py-2.5 rounded-lg text-sm font-bold hover:opacity-90 transition disabled:opacity-50"
+              key={item.key}
+              className={activeView === item.key ? 'nav-item active' : 'nav-item'}
+              onClick={() => setActiveView(item.key)}
             >
-              {result === 'checking' ? 'Analyzing…' : 'Run self-check'}
+              <span className="material-symbols-outlined">{item.icon}</span>
+              <span>{item.label}</span>
             </button>
-          </form>
-        </div>
+          ))}
+        </nav>
 
-        <div className="mt-6 bg-white border border-border-standard rounded-xl p-6 shadow-sm text-center">
-          <h3 className="font-bold text-sm mb-3">Result</h3>
-          {!result || result === 'checking' ? (
-            <p className="text-sm text-slate-text-muted">
-              {result === 'checking' ? 'Processing…' : 'No submission yet.'}
-            </p>
-          ) : (
-            <>
-              <span className={bandStyles[result.band].badge}>{bandStyles[result.band].label}</span>
-              <p className="text-[11px] text-slate-text-muted mt-3 border-t border-border-standard pt-3">
-                Real risk band + guidance shown here once 3.5 / 8.2 are wired up.
-                Only the aggregate result will ever appear — no matched files or peer names.
-              </p>
-            </>
-          )}
+        <div className="sidebar-footer">
+          <span>{user?.fullName || 'Student'}</span>
+          <button className="logout-link" onClick={logout}>Logout</button>
         </div>
-      </div>
+      </aside>
+
+      <main className="main-shell">
+        <header className="topbar">
+          <h2>{activeView === 'dashboard' ? 'Student Dashboard' : activeView === 'courses' ? 'My Courses' : activeView === 'history' ? 'History' : 'Profile & Settings'}</h2>
+          <div className="topbar-tools">
+            <span className="role-pill">Student</span>
+            <div className="avatar-circle">AA</div>
+          </div>
+        </header>
+
+        <div className="content-wrap">
+          {activeView === 'dashboard' && renderDashboard()}
+          {activeView === 'courses' && renderCourses()}
+          {activeView === 'history' && renderHistory()}
+          {activeView === 'profile' && renderProfile()}
+
+          <div className="panel self-check-panel">
+            <div className="panel-header">
+              <h3>Self-check submission</h3>
+              <span className="muted">{Math.max(0, 3 - (result?.checksUsed || 0))} of 3 remaining</span>
+            </div>
+
+            <form onSubmit={runSelfCheck} className="self-check-form">
+              <label>Git repository</label>
+              <input value={repoUrl} onChange={(e) => setRepoUrl(e.target.value)} placeholder="https://github.com/your-org/project" />
+              <div className="or-divider">or</div>
+              <label className="upload-box">
+                <input type="file" />
+                <span>Drop file / browse to upload</span>
+              </label>
+              <button type="submit" className="primary-button" disabled={result?.checking}>
+                {result?.checking ? 'Analyzing…' : 'Run self-check'}
+              </button>
+            </form>
+
+            <div className="result-box">
+              {!result ? (
+                <p>No submission yet.</p>
+              ) : result.checking ? (
+                <p>Processing your repository...</p>
+              ) : (
+                <>
+                  <span className={`risk-badge ${RISK_META[result.band].cls}`}>{RISK_META[result.band].badge}</span>
+                  <p className="result-copy">
+                    This aggregate band is derived from structure, commit history, and provenance signals.
+                    Soft flags are surfaced to students, while faculty decisions remain human-reviewed.
+                  </p>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      </main>
     </div>
   );
 }

@@ -1,134 +1,243 @@
 import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 
-// Mock data — shape matches what 7.5 (Instructor Dashboard API Integration)
-// will eventually fetch from the real backend.
-const SUBMISSIONS = [
-  { id: 1, name: 'E. Winters', course: 'CS302', assignment: 'Project 2', lang: 'Java', risk: 'High', flags: 4, time: '2d ago' },
-  { id: 2, name: 'S. Connor', course: 'CS101', assignment: 'Lab 5', lang: 'Python', risk: 'Medium', flags: 1, time: '4h ago' },
-  { id: 3, name: 'A. Adams', course: 'CS205', assignment: 'Assignment 3', lang: 'JavaScript', risk: 'Low', flags: 0, time: '1d ago' },
-];
-
 const NAV_ITEMS = [
   { key: 'dashboard', label: 'Dashboard', icon: 'dashboard' },
-  { key: 'subjects', label: 'Subjects', icon: 'school' },
-  { key: 'clusters', label: 'Clusters', icon: 'hub' },
-  { key: 'settings', label: 'Settings', icon: 'settings' },
+  { key: 'collaborators', label: 'Collaborators', icon: 'group_add' },
+  { key: 'courses', label: 'Courses', icon: 'school' },
+  { key: 'flags', label: 'Flags', icon: 'flag' },
+  { key: 'settings', label: 'Profile & Settings', icon: 'settings' },
+];
+
+const initialRequests = [
+  { id: 'r1', student: 'Alex Adams', course: 'CS101', type: 'Repository access', status: 'pending' },
+  { id: 'r2', student: 'Jamie Lopez', course: 'CS205', type: 'Collaborator invite', status: 'pending' },
+  { id: 'r3', student: 'D. Santos', course: 'CS302', type: 'Repository access', status: 'pending' },
+  { id: 'r4', student: 'M. Chen', course: 'CS302', type: 'Collaborator invite', status: 'pending' },
+];
+
+const SUBMISSIONS = [
+  { id: 1, name: 'Ethan Winters', course: 'CS302', assignment: 'Project 2', lang: 'Java', risk: 'High', flags: 4, time: '2d ago' },
+  { id: 2, name: 'Sarah Connor', course: 'CS101', assignment: 'Lab 5', lang: 'Python', risk: 'Medium', flags: 1, time: '4h ago' },
+  { id: 3, name: 'Arthur Adams', course: 'CS205', assignment: 'Assignment 3', lang: 'JavaScript', risk: 'Low', flags: 0, time: '1d ago' },
+  { id: 4, name: 'James Reyes', course: 'CS101', assignment: 'Lab 4', lang: 'C', risk: 'Medium', flags: 1, time: '6h ago' },
 ];
 
 const RISK_META = {
-  Low: { cls: 'low', border: 'border-risk-low', text: 'text-risk-low' },
-  Medium: { cls: 'medium', border: 'border-risk-medium', text: 'text-risk-medium' },
-  High: { cls: 'high', border: 'border-risk-high', text: 'text-risk-high' },
+  Low: { cls: 'risk-low', text: 'text-risk-low' },
+  Medium: { cls: 'risk-medium', text: 'text-risk-medium' },
+  High: { cls: 'risk-high', text: 'text-risk-high' },
 };
-
-const KPI = [
-  { key: 'total', label: 'Total submissions', value: SUBMISSIONS.length, accent: 'border-secondary' },
-  { key: 'high', label: 'High risk', value: SUBMISSIONS.filter((s) => s.risk === 'High').length, accent: 'border-risk-high' },
-  { key: 'medium', label: 'Medium risk', value: SUBMISSIONS.filter((s) => s.risk === 'Medium').length, accent: 'border-risk-medium' },
-  { key: 'low', label: 'Low risk', value: SUBMISSIONS.filter((s) => s.risk === 'Low').length, accent: 'border-risk-low' },
-];
 
 export default function InstructorDashboard() {
   const { user, logout } = useAuth();
   const [activeNav, setActiveNav] = useState('dashboard');
-  const [selectedId, setSelectedId] = useState(null);
+  const [requests, setRequests] = useState(initialRequests);
+  const [selectedId, setSelectedId] = useState(1);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   const selected = SUBMISSIONS.find((s) => s.id === selectedId);
 
+  function acceptRequest(id) {
+    setRequests((current) => current.filter((item) => item.id !== id));
+  }
+
+  function declineRequest(id) {
+    setRequests((current) => current.filter((item) => item.id !== id));
+  }
+
+  const kpis = [
+    { label: 'Total submissions', value: '142', badge: 'dashboard' },
+    { label: 'High risk', value: '8', badge: 'error' },
+    { label: 'Medium risk', value: '24', badge: 'warning' },
+    { label: 'Low risk', value: '110', badge: 'check_circle' },
+  ];
+
   return (
-    <div className="min-h-screen flex bg-background text-primary">
-      <div className="w-56 border-r border-border-standard p-4 flex flex-col gap-1">
-        <div className="flex items-center gap-2 px-2 py-3 mb-2">
-          <span className="material-symbols-outlined text-secondary">shield</span>
-          <span className="font-bold text-lg">OriginTrace</span>
-        </div>
-        {NAV_ITEMS.map((item) => (
-          <button
-            key={item.key}
-            onClick={() => setActiveNav(item.key)}
-            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition ${
-              activeNav === item.key ? 'bg-secondary text-white font-bold' : 'text-slate-text-secondary hover:bg-surface-container-high'
-            }`}
-          >
-            <span className="material-symbols-outlined text-[20px]">{item.icon}</span>
-            {item.label}
-          </button>
-        ))}
-        <div className="mt-auto px-3 py-2 text-xs text-slate-text-muted">
-          Instructor: {user?.fullName || '[name]'}
-          <button onClick={logout} className="block text-secondary font-bold mt-1">Sign out</button>
-        </div>
-      </div>
+    <div className={isSidebarCollapsed ? 'app-layout sidebar-collapsed' : 'app-layout'}>
+      <aside className="sidebar">
+        <button type="button" className="brand-toggle" onClick={() => setIsSidebarCollapsed((value) => !value)} aria-label="Toggle sidebar">
+          <img src="/origintrace-logo.svg" alt="OriginTrace logo" className="brand-logo mini-logo" />
+          <span className="brand-text">OriginTrace</span>
+        </button>
 
-      <div className="flex-1 p-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          {KPI.map((k) => (
-            <div key={k.key} className={`bg-white p-5 rounded-xl shadow-sm border-l-4 ${k.accent}`}>
-              <p className="text-xs font-semibold text-slate-text-muted">{k.label}</p>
-              <h3 className="text-2xl font-bold mt-1">{k.value}</h3>
-            </div>
+        <nav className="nav-group">
+          {NAV_ITEMS.map((item) => (
+            <button
+              key={item.key}
+              className={activeNav === item.key ? 'nav-item active' : 'nav-item'}
+              onClick={() => setActiveNav(item.key)}
+            >
+              <span className="material-symbols-outlined">{item.icon}</span>
+              <span>{item.label}</span>
+            </button>
           ))}
-        </div>
+        </nav>
 
-        <div className="bg-white border border-border-standard rounded-xl overflow-hidden shadow-sm">
-          <div className="px-5 py-3 bg-surface-container-low border-b border-border-standard flex justify-between items-center">
-            <h5 className="font-bold text-primary">Submissions</h5>
-            <span className="text-xs text-slate-text-muted">{SUBMISSIONS.length} shown</span>
-          </div>
-          <div className="divide-y divide-border-standard">
-            {SUBMISSIONS.map((s) => (
-              <div
-                key={s.id}
-                onClick={() => setSelectedId(s.id)}
-                className={`flex items-center justify-between gap-4 px-5 py-3 cursor-pointer hover:bg-surface-container-low transition ${
-                  selectedId === s.id ? 'bg-secondary/5' : ''
-                }`}
-              >
-                <div>
-                  <p className="font-semibold text-primary">{s.name}</p>
-                  <p className="text-xs text-slate-text-muted">{s.course} · {s.assignment} · {s.time}</p>
-                </div>
-                <div className="flex items-center gap-3 text-sm">
-                  <span className="text-[10px] bg-surface-container-high px-2 py-0.5 rounded">{s.lang}</span>
-                  <span className="text-xs text-slate-text-muted w-14">{s.flags} flag{s.flags === 1 ? '' : 's'}</span>
-                  <span className={`risk-badge ${RISK_META[s.risk].cls}`}>{s.risk}</span>
-                </div>
-              </div>
-            ))}
-          </div>
+        <div className="sidebar-footer">
+          <span>{user?.fullName || 'Instructor'}</span>
+          <button className="logout-link" onClick={logout}>Logout</button>
         </div>
+      </aside>
 
-        <div className="mt-6 bg-white border border-border-standard rounded-xl p-6">
-          <h5 className="font-bold mb-3">Detail panel</h5>
-          {!selected ? (
-            <p className="text-sm text-slate-text-muted">Select a submission above to view details.</p>
-          ) : (
+      <main className="main-shell">
+        <header className="topbar">
+          <h2>{activeNav === 'dashboard' ? 'Instructor Dashboard' : activeNav === 'collaborators' ? 'Collaborators' : activeNav === 'courses' ? 'Courses' : activeNav === 'flags' ? 'Flags' : 'Profile & Settings'}</h2>
+          <div className="topbar-tools">
+            <span className="role-pill">Instructor</span>
+            <div className="avatar-circle">PR</div>
+          </div>
+        </header>
+
+        <div className="content-wrap">
+          {activeNav === 'dashboard' && (
             <>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div className="p-3 border border-dashed border-border-standard rounded-lg text-xs text-slate-text-muted">
-                  Matched fragments — pending 3.2 / 7.2
+              <div className="stats-grid">
+                {kpis.map((stat) => (
+                  <div key={stat.label} className="stat-card">
+                    <div className="stat-topline">
+                      <span className="material-symbols-outlined">{stat.badge}</span>
+                      <span>{stat.label}</span>
+                    </div>
+                    <h3>{stat.value}</h3>
+                  </div>
+                ))}
+              </div>
+
+              <div className="panel">
+                <div className="panel-header">
+                  <h3>Recent submissions</h3>
+                  <span className="muted">{SUBMISSIONS.length} shown</span>
                 </div>
-                <div className="p-3 border border-dashed border-border-standard rounded-lg text-xs text-slate-text-muted">
-                  Peer overlaps — pending 6.2 / 7.2
-                </div>
-                <div className="p-3 border border-dashed border-border-standard rounded-lg text-xs text-slate-text-muted">
-                  Commit / provenance flags — pending 4.x / 5.x / 7.3
-                </div>
-                <div className={`p-3 border border-dashed border-border-standard rounded-lg text-xs font-bold ${RISK_META[selected.risk].text}`}>
-                  Risk band: {selected.risk} — pending 6.3
+
+                <div className="submission-table">
+                  {SUBMISSIONS.map((s) => (
+                    <div
+                      key={s.id}
+                      className={selectedId === s.id ? 'submission-row active' : 'submission-row'}
+                      onClick={() => setSelectedId(s.id)}
+                    >
+                      <div>
+                        <strong>{s.name}</strong>
+                        <p>{s.course} · {s.assignment} · {s.time}</p>
+                      </div>
+                      <div className="submission-row-meta">
+                        <span className="lang-pill">{s.lang}</span>
+                        <span className="flag-pill">{s.flags} flags</span>
+                        <span className={`risk-badge ${RISK_META[s.risk].cls}`}>{s.risk}</span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
-              <div className="flex gap-2 mt-4">
-                <button disabled className="px-4 py-2 rounded-lg text-sm font-bold border border-border-standard text-slate-text-muted">Clear</button>
-                <button disabled className="px-4 py-2 rounded-lg text-sm font-bold border border-border-standard text-slate-text-muted">Flag for review</button>
-                <button disabled className="px-4 py-2 rounded-lg text-sm font-bold border border-border-standard text-slate-text-muted">Mark under review</button>
-              </div>
-              <p className="text-[11px] text-slate-text-muted mt-2">Final-call actions wired up in 7.4.</p>
+
+              {selected && (
+                <div className="panel detail-panel">
+                  <div className="panel-header">
+                    <h3>{selected.name}</h3>
+                    <span className={`risk-badge ${RISK_META[selected.risk].cls}`}>{selected.risk}</span>
+                  </div>
+
+                  <div className="detail-grid">
+                    <div className="detail-box">
+                      <h4>Matched fragments</h4>
+                      <p>Similarity cluster includes 2 peer submissions with 87% structural overlap.</p>
+                    </div>
+                    <div className="detail-box">
+                      <h4>Commit plausibility</h4>
+                      <p>3 commits over 1 day, author-committer mismatch detected, force-push observed.</p>
+                    </div>
+                    <div className="detail-box">
+                      <h4>Provenance</h4>
+                      <p>Consistent device pattern but large late-night burst before deadline.</p>
+                    </div>
+                    <div className="detail-box emphasis">
+                      <h4>Faculty verdict</h4>
+                      <p>Manual review recommended. Commit changes and provenance data are soft flags, not final findings.</p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </>
           )}
+
+          {activeNav === 'collaborators' && (
+            <div className="panel">
+              <div className="panel-header">
+                <h3>Collaborator requests</h3>
+                <span className="muted">{requests.length} pending</span>
+              </div>
+
+              <div className="request-list">
+                {requests.length === 0 ? (
+                  <p className="empty-state">All collaborator requests have been resolved.</p>
+                ) : (
+                  requests.map((request) => (
+                    <div key={request.id} className="request-row">
+                      <div>
+                        <strong>{request.student}</strong>
+                        <p>{request.course} · {request.type}</p>
+                      </div>
+                      <div className="request-actions">
+                        <button className="primary-button small" onClick={() => acceptRequest(request.id)}>Accept</button>
+                        <button className="ghost-button small" onClick={() => declineRequest(request.id)}>Decline</button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+
+          {activeNav === 'courses' && (
+            <div className="panel">
+              <div className="panel-header">
+                <h3>Course roster</h3>
+                <span className="muted">3 active courses</span>
+              </div>
+              <div className="course-grid">
+                {['CS101', 'CS205', 'CS302'].map((course) => (
+                  <div key={course} className="course-card">
+                    <h4>{course}</h4>
+                    <p>Introduction to Programming</p>
+                    <small>25 students · 4 flagged</small>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {activeNav === 'flags' && (
+            <div className="panel">
+              <div className="panel-header">
+                <h3>Flag summary</h3>
+                <span className="muted">Human review required</span>
+              </div>
+              <div className="flag-list">
+                <div className="flag-row"><span>High risk</span><strong>8</strong></div>
+                <div className="flag-row"><span>Medium risk</span><strong>24</strong></div>
+                <div className="flag-row"><span>Low risk</span><strong>110</strong></div>
+              </div>
+            </div>
+          )}
+
+          {activeNav === 'settings' && (
+            <div className="profile-layout">
+              <div className="panel">
+                <div className="panel-header">
+                  <h3>Account</h3>
+                </div>
+                <div className="settings-list">
+                  <div><span>Instructor</span><strong>{user?.fullName}</strong></div>
+                  <div><span>Department</span><strong>Computer Science</strong></div>
+                  <div><span>Region</span><strong>USJR</strong></div>
+                  <div><span>Security</span><strong>JWT + HTTPS</strong></div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
-      </div>
+      </main>
     </div>
   );
 }
