@@ -46,6 +46,28 @@ paths:
         '200': { description: Daily quota }
         '401': { description: Unauthorized }
         '403': { description: Student role required }
+  /analyze:
+    post:
+      security: [{ bearerAuth: [] }]
+      description: Run the shared Git or upload analysis pipeline for an instructor submission or student self-check.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [language]
+              properties:
+                source_url: { type: string, format: uri }
+                upload: { type: string, format: binary }
+                language: { type: string, enum: [c, java, python, php] }
+                is_self_check: { type: boolean, default: false }
+      responses:
+        '200': { description: Risk band and similarity cluster members }
+        '400': { description: Invalid source or language }
+        '401': { description: Unauthorized }
+        '403': { description: Instructor or student role required }
+        '429': { description: Student daily self-check limit reached }
 components:
   securitySchemes:
     bearerAuth:

@@ -107,3 +107,29 @@ CREATE TABLE risk_scores (
 );
 
 CREATE INDEX idx_risk_scores_band ON risk_scores(risk_band);
+
+-- ============================================================
+-- SIMILARITY CLUSTERS / DECISIONS / SELF-CHECK RATE LIMITING
+-- ============================================================
+CREATE TABLE similarity_clusters (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    similarity_score REAL NOT NULL CHECK (similarity_score >= 0 AND similarity_score <= 1),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE similarity_cluster_members (
+    cluster_id UUID NOT NULL REFERENCES similarity_clusters(id) ON DELETE CASCADE,
+    submission_id UUID NOT NULL REFERENCES submissions(id) ON DELETE CASCADE,
+    PRIMARY KEY (cluster_id, submission_id)
+);
+
+CREATE TABLE originality_decisions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    submission_id UUID NOT NULL UNIQUE REFERENCES submissions(id) ON DELETE CASCADE,
+    instructor_id UUID NOT NULL REFERENCES users(id),
+    decision VARCHAR(20) NOT NULL CHECK (decision IN ('cleared', 'under_review', 'flagged')),
+    decided_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_cluster_members_submission ON similarity_cluster_members(submission_id);
+CREATE INDEX idx_decisions_instructor ON originality_decisions(instructor_id);

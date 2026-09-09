@@ -1,44 +1,71 @@
 # OriginTrace
 
-OriginTrace is a role-based code submission review prototype. The repository currently contains a Vite/React frontend, an Express API foundation, and a PostgreSQL schema for users, submissions, fingerprints, commit signals, provenance flags, and risk scores.
+OriginTrace is a role-based code submission review prototype. The repository contains a Vite/React frontend, an Express authentication API, a Python analysis service, and a PostgreSQL schema for submissions, AST fingerprints, commit/provenance signals, risk scores, similarity clusters, decisions, and rate limiting.
 
 ## Requirements
 
 - Windows, macOS, or Linux
-- Docker Desktop with Docker Compose v2
-- Node.js 22 or newer for the backend
-- Node.js 18 or newer for the frontend
-- npm
+- Docker Desktop with Docker Compose v2 and a running Docker engine
+- Node.js 18 or newer and npm for the frontend
+- Node.js 22 or newer only if running the Express API outside Docker
+- Python 3.12 or newer only if running the analysis service outside Docker
+- Git, if running the analysis service outside Docker
 
-Docker Desktop is required for the recommended setup because it runs PostgreSQL and the API services together.
+The recommended Docker setup installs the API and analysis-service dependencies automatically. Git is installed inside the analysis image because repository ingestion uses `git clone`.
 
-## Recommended Setup
+## Run With Docker
 
-From the repository root:
+1. Open Docker Desktop and confirm that the Docker engine is running.
+
+2. Open PowerShell in the repository root:
+
+```powershell
+cd "C:\Users\enote\OneDrive\Documents\Capstone"
+```
+
+3. On the first run, or after schema changes, recreate the database volume:
+
+```powershell
+docker compose down -v
+```
+
+This deletes the local PostgreSQL data volume. Do not use `-v` when you need to preserve existing local data.
+
+4. Build and start PostgreSQL, the Node API, and the Python analysis service:
 
 ```powershell
 docker compose up --build
 ```
 
-Services:
+Leave this terminal running.
 
-- Frontend: run separately at `http://localhost:5173`
-- API: `http://localhost:8000`
-- API health check: `http://localhost:8000/api/health`
-- PostgreSQL: `localhost:5432`
-
-In a second terminal, start the frontend:
+5. Open a second PowerShell window and start the frontend:
 
 ```powershell
-Push-Location frontend
+cd "C:\Users\enote\OneDrive\Documents\Capstone\frontend"
 npm install
 npm run dev
-Pop-Location
 ```
 
-Open `http://localhost:5173` in a browser.
+6. Open the frontend URL printed by Vite, normally `http://localhost:5173`. If port 5173 is already in use, Vite may choose `http://localhost:5174`.
 
-The first PostgreSQL startup runs [001_initial_schema.sql](db/migrations/001_initial_schema.sql) automatically. The database uses a named Docker volume so data survives container restarts.
+Services:
+
+- Frontend: `http://localhost:5173` or the alternate Vite port shown in the terminal
+- Express API: `http://localhost:8000`
+- Python analysis service: `http://localhost:8100`
+- PostgreSQL: `localhost:5432`
+
+Verify both backend services from PowerShell:
+
+```powershell
+Invoke-RestMethod http://localhost:8000/api/health
+Invoke-RestMethod http://localhost:8100/api/health
+```
+
+Both commands should return a JSON object with `status` set to `ok`.
+
+The first PostgreSQL startup runs [001_initial_schema.sql](db/migrations/001_initial_schema.sql) automatically. The database uses a named Docker volume so data survives normal container restarts.
 
 ## Environment Variables
 
@@ -66,15 +93,15 @@ Frontend variable in [frontend/.env.example](frontend/.env.example):
 
 Do not commit `.env` files or real secrets.
 
-## Local Development Without the API Container
+## Run Services Locally
 
-Start only PostgreSQL with Docker:
+Use this option when actively developing backend code outside Docker. Start PostgreSQL in Docker:
 
 ```powershell
 docker compose up db
 ```
 
-In another terminal, start the API:
+In another terminal, start the Node API:
 
 ```powershell
 Push-Location backend
@@ -84,7 +111,18 @@ npm run dev
 Pop-Location
 ```
 
-In a third terminal, start the frontend:
+In a third terminal, install the Python analysis dependencies and start the analysis service:
+
+```powershell
+Push-Location analysis
+python -m pip install -r requirements-dev.txt
+$env:DATABASE_URL = "postgres://origintrace:origintrace@localhost:5432/origintrace"
+$env:JWT_SECRET = "replace-with-a-development-secret"
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8100
+Pop-Location
+```
+
+In a fourth terminal, start the frontend:
 
 ```powershell
 Push-Location frontend
@@ -102,6 +140,24 @@ npm test
 Pop-Location
 ```
 
+Run the Python tests with:
+
+```powershell
+Push-Location analysis
+python -m pytest -q
+Pop-Location
+```
+
+## Stop Services
+
+Press `Ctrl+C` in the Docker and frontend terminals, then run:
+
+```powershell
+docker compose down
+```
+
+Use `docker compose down -v` only when you intentionally want to delete the local database volume.
+
 ## API Routes
 
 The contract is documented in [0.5_api_contract.yaml](docs/0.5_api_contract.yaml).
@@ -113,6 +169,10 @@ The contract is documented in [0.5_api_contract.yaml](docs/0.5_api_contract.yaml
 | `GET` | `/api/me` | Authenticated |
 | `GET` | `/api/instructor/submissions` | Instructor only |
 | `GET` | `/api/student/self-checks/quota` | Student only |
+
+The Python analysis service exposes `POST http://localhost:8100/api/analyze`. It accepts exactly one of `source_url` or `upload`, plus a supported `language` (`c`, `java`, `python`, or `php`). Both instructor submissions and student self-checks use the same pipeline; student self-checks are limited to three per day.
+
+The service parses source with tree-sitter, removes configured boilerplate and generated/vendor paths, creates AST fingerprints with winnowing, reads Git commit/provenance signals, computes a risk band, and records matching submissions in similarity clusters.
 
 Protected routes require:
 
@@ -135,13 +195,14 @@ docker compose up --build
 
 - The frontend login screen still uses demo role buttons and is not yet connected to `POST /api/auth/login`.
 - No seed users are included yet, so real API login requires inserting a user with a bcrypt password hash.
-- Submission analysis, risk computation, file processing, quota persistence, and instructor decisions are not implemented yet.
+- HTTPS/TLS termination should be provided by the USJR deployment reverse proxy; local Docker runs HTTP for development.
 - The admin page is still a placeholder.
 
 ## Project Structure
 
 ```text
 backend/       Express API, JWT middleware, tests, Dockerfile
+analysis/      Python FastAPI ingestion and AST/winnowing analysis service
 db/migrations/ PostgreSQL schema migration
 design/        Low-fidelity wireframes
 docs/          Requirements, architecture, topology, and API contract

@@ -29,6 +29,29 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:8000/api/health').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  analysis:
+    build: ./analysis
+    environment:
+      DATABASE_URL: postgres://origintrace:origintrace@db:5432/origintrace
+      JWT_SECRET: ${JWT_SECRET:-replace-this-development-secret}
+      MAX_UPLOAD_BYTES: 26214400
+      SELF_CHECK_LIMIT: 3
+    ports:
+      - "8100:8100"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/api/health')"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
 volumes:
   postgres-data:
