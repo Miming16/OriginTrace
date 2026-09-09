@@ -16,8 +16,12 @@ CREATE TABLE users (
     password_hash   VARCHAR(255) NOT NULL,
     role            VARCHAR(20)  NOT NULL CHECK (role IN ('instructor', 'student', 'admin')),
     full_name       VARCHAR(255) NOT NULL,
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT users_email_not_blank CHECK (length(trim(email)) > 0),
+    CONSTRAINT users_full_name_not_blank CHECK (length(trim(full_name)) > 0)
 );
+
+CREATE INDEX idx_users_role ON users(role);
 
 -- ============================================================
 -- SUBMISSIONS
@@ -31,11 +35,15 @@ CREATE TABLE submissions (
     is_self_check   BOOLEAN NOT NULL DEFAULT false,
     status          VARCHAR(20) NOT NULL DEFAULT 'pending'
                         CHECK (status IN ('pending', 'processing', 'complete', 'failed')),
-    submitted_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+    submitted_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT submissions_source_url_not_blank CHECK (length(trim(source_url)) > 0)
 );
 
 CREATE INDEX idx_submissions_student ON submissions(student_id);
 CREATE INDEX idx_submissions_status ON submissions(status);
+CREATE INDEX idx_submissions_submitted_at ON submissions(submitted_at DESC);
+CREATE INDEX idx_submissions_self_check ON submissions(student_id, submitted_at)
+    WHERE is_self_check = true;
 
 -- ============================================================
 -- FINGERPRINTS  (AST winnowing output)
@@ -45,7 +53,7 @@ CREATE TABLE fingerprints (
     submission_id   UUID NOT NULL REFERENCES submissions(id) ON DELETE CASCADE,
     file_path       TEXT NOT NULL,
     hash_value      BIGINT NOT NULL,
-    window_position INTEGER NOT NULL,
+    window_position INTEGER NOT NULL CHECK (window_position >= 0),
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -92,7 +100,10 @@ CREATE TABLE risk_scores (
     similarity_score        REAL NOT NULL,
     commit_flag_count       INTEGER NOT NULL DEFAULT 0,
     provenance_flag_count   INTEGER NOT NULL DEFAULT 0,
-    computed_at             TIMESTAMPTZ NOT NULL DEFAULT now()
+    computed_at             TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT risk_scores_similarity_nonnegative CHECK (similarity_score >= 0),
+    CONSTRAINT risk_scores_commit_flags_nonnegative CHECK (commit_flag_count >= 0),
+    CONSTRAINT risk_scores_provenance_flags_nonnegative CHECK (provenance_flag_count >= 0)
 );
 
 CREATE INDEX idx_risk_scores_band ON risk_scores(risk_band);
