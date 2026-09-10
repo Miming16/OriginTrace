@@ -40,21 +40,39 @@ Because there were also no git credentials, nothing has been pushed. See
 
 ## Reproducing this run
 
+Neither image can run its own suite (D-20): `backend/Dockerfile` installs with
+`npm ci --omit=dev` and copies only `src/`, and `analysis/Dockerfile` installs
+only `requirements.txt` and copies only `app/`. Both suites therefore run
+against the containerised database from outside the containers.
+
 ```powershell
+# 1. fresh volume, stack up, dev users loaded
 docker compose down -v
 docker compose up --build -d
-docker compose exec -T db psql -U origintrace -d origintrace < db/seeds/001_dev_users.sql
+docker compose ps                       # wait for db / api / analysis to be healthy
+Get-Content db/seeds/001_dev_users.sql -Raw |
+    docker compose exec -T db psql -U origintrace -d origintrace
 
-cd backend; npm install; npm test                     # 14 pass, 24 skipped (no DATABASE_URL)
+# 2. node suite, from the host
+cd backend
+npm install
+npm test                                # 14 pass, 24 skipped (no DATABASE_URL)
 $env:DATABASE_URL = 'postgres://origintrace:origintrace@localhost:5432/origintrace'
-npm test                                              # 38 pass
+npm test                                # 38 pass
+Remove-Item Env:\DATABASE_URL
 cd ..
 
-docker compose exec analysis pip install -r requirements-dev.txt httpx
-docker compose exec analysis python -m pytest -q      # 111 pass
+# 3. pytest, in a throwaway container with analysis/ mounted over /app -- it
+#    joins the compose network and inherits DATABASE_URL=...@db:5432/...
+docker compose run --rm -v "${PWD}/analysis:/app" -w /app analysis `
+    sh -c "pip install -q -r requirements-dev.txt && python -m pytest -q"   # 111 pass
 
+# 4. the container-only checks
 pwsh docs/verification/smoke.ps1
 ```
+
+Run steps 2 and 3 in sequence, not in parallel: both suites write to the same
+database.
 
 ## Phase 1 WBS status
 
@@ -328,6 +346,22 @@ happened in this verification environment (see `ENVIRONMENT.md`).
 *Repro:* apply the migration to a PostgreSQL 16 build without contrib.
 *Observed:* `ERROR: could not open extension control file ... pgcrypto.control`.
 *Expected:* the migration applies on any PostgreSQL 13+.
+
+### D-20 — neither image can run its own test suite — **Minor** — WBS 1.1.1, 1.2.2
+
+`backend/Dockerfile` runs `npm ci --omit=dev` and copies only `src/`, so the api
+image has neither `supertest` nor `backend/test/`. `analysis/Dockerfile`
+installs only `requirements.txt` and copies only `app/`, so the analysis image
+has neither `pytest` nor `analysis/tests/`. Lean production images are the right
+default, but the consequence is that there is no way to run either suite in the
+environment the code actually ships in — CI has to reconstruct it from outside,
+and a dependency that behaves differently on Python 3.12 or Alpine would not be
+caught. A test stage in a multi-stage build, or a compose profile that mounts
+the tests, would close it.
+
+*Repro:* `docker compose exec analysis python -m pytest -q`.
+*Observed:* `/usr/local/bin/python: No module named pytest`; `analysis/tests/` is not in the image either.
+*Expected:* a supported way to run each suite inside its own image.
 
 ### D-13 — no linter is configured — **Minor** — WBS 1.2.2
 
