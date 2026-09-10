@@ -1,0 +1,15 @@
+# backend API - top-level npm dependency tree (npm ls --depth=0, run in backend/)
+#
+# CAPTURE CAVEAT: captured on the verification VM's Node 22, not inside the api
+# container (docker unavailable). backend/Dockerfile pins the container's Node
+# version; package-lock.json is the same lock file in both cases.
+#
+origintrace-api@0.1.0 /sessions/rcw-01kj9jnte8zwwv92un85s1fa/mnt/OriginTrace/backend
+├── bcryptjs@2.4.3
+├── cors@2.8.6
+├── dotenv@16.6.1
+├── express@4.22.2
+├── jsonwebtoken@9.0.3
+├── pg@8.23.0
+└── supertest@7.2.2
+
