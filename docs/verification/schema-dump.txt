@@ -1,0 +1,248 @@
+OriginTrace -- schema dump for Phase 1 verification (WBS 0.3.x / 1.3)
+Produced by applying db/migrations/001_initial_schema.sql verbatim to
+PostgreSQL 16.2 and dumping every relation with psql \d+.
+Captured: 2026-09-10 14:23:46Z
+
+server version: 16.2
+
+                     List of relations
+ Schema |            Name            | Type  |    Owner    
+--------+----------------------------+-------+-------------
+ public | commit_signals             | table | origintrace
+ public | fingerprints               | table | origintrace
+ public | originality_decisions      | table | origintrace
+ public | provenance_flags           | table | origintrace
+ public | risk_scores                | table | origintrace
+ public | similarity_cluster_members | table | origintrace
+ public | similarity_clusters        | table | origintrace
+ public | submissions                | table | origintrace
+ public | users                      | table | origintrace
+(9 rows)
+
+                                          List of relations
+ Schema |                  Name                   | Type  |    Owner    |           Table            
+--------+-----------------------------------------+-------+-------------+----------------------------
+ public | commit_signals_pkey                     | index | origintrace | commit_signals
+ public | fingerprints_pkey                       | index | origintrace | fingerprints
+ public | idx_cluster_members_submission          | index | origintrace | similarity_cluster_members
+ public | idx_commit_signals_submission           | index | origintrace | commit_signals
+ public | idx_decisions_instructor                | index | origintrace | originality_decisions
+ public | idx_fingerprints_hash                   | index | origintrace | fingerprints
+ public | idx_fingerprints_submission             | index | origintrace | fingerprints
+ public | idx_provenance_flags_submission         | index | origintrace | provenance_flags
+ public | idx_risk_scores_band                    | index | origintrace | risk_scores
+ public | idx_submissions_self_check              | index | origintrace | submissions
+ public | idx_submissions_status                  | index | origintrace | submissions
+ public | idx_submissions_student                 | index | origintrace | submissions
+ public | idx_submissions_submitted_at            | index | origintrace | submissions
+ public | idx_users_role                          | index | origintrace | users
+ public | originality_decisions_pkey              | index | origintrace | originality_decisions
+ public | originality_decisions_submission_id_key | index | origintrace | originality_decisions
+ public | provenance_flags_pkey                   | index | origintrace | provenance_flags
+ public | risk_scores_pkey                        | index | origintrace | risk_scores
+ public | risk_scores_submission_id_key           | index | origintrace | risk_scores
+ public | similarity_cluster_members_pkey         | index | origintrace | similarity_cluster_members
+ public | similarity_clusters_pkey                | index | origintrace | similarity_clusters
+ public | submissions_pkey                        | index | origintrace | submissions
+ public | users_email_key                         | index | origintrace | users
+ public | users_pkey                              | index | origintrace | users
+(24 rows)
+
+
+                                                           Table "public.users"
+    Column     |           Type           | Collation | Nullable |      Default      | Storage  | Compression | Stats target | Description 
+---------------+--------------------------+-----------+----------+-------------------+----------+-------------+--------------+-------------
+ id            | uuid                     |           | not null | gen_random_uuid() | plain    |             |              | 
+ email         | character varying(255)   |           | not null |                   | extended |             |              | 
+ password_hash | character varying(255)   |           | not null |                   | extended |             |              | 
+ role          | character varying(20)    |           | not null |                   | extended |             |              | 
+ full_name     | character varying(255)   |           | not null |                   | extended |             |              | 
+ created_at    | timestamp with time zone |           | not null | now()             | plain    |             |              | 
+Indexes:
+    "users_pkey" PRIMARY KEY, btree (id)
+    "idx_users_role" btree (role)
+    "users_email_key" UNIQUE CONSTRAINT, btree (email)
+Check constraints:
+    "users_email_not_blank" CHECK (length(TRIM(BOTH FROM email)) > 0)
+    "users_full_name_not_blank" CHECK (length(TRIM(BOTH FROM full_name)) > 0)
+    "users_role_check" CHECK (role::text = ANY (ARRAY['instructor'::character varying, 'student'::character varying, 'admin'::character varying]::text[]))
+Referenced by:
+    TABLE "originality_decisions" CONSTRAINT "originality_decisions_instructor_id_fkey" FOREIGN KEY (instructor_id) REFERENCES users(id)
+    TABLE "submissions" CONSTRAINT "submissions_student_id_fkey" FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE
+Access method: heap
+
+
+                                                              Table "public.submissions"
+    Column     |           Type           | Collation | Nullable |           Default            | Storage  | Compression | Stats target | Description 
+---------------+--------------------------+-----------+----------+------------------------------+----------+-------------+--------------+-------------
+ id            | uuid                     |           | not null | gen_random_uuid()            | plain    |             |              | 
+ student_id    | uuid                     |           | not null |                              | plain    |             |              | 
+ source_type   | character varying(10)    |           | not null |                              | extended |             |              | 
+ source_url    | text                     |           | not null |                              | extended |             |              | 
+ language      | character varying(20)    |           | not null |                              | extended |             |              | 
+ is_self_check | boolean                  |           | not null | false                        | plain    |             |              | 
+ status        | character varying(20)    |           | not null | 'pending'::character varying | extended |             |              | 
+ submitted_at  | timestamp with time zone |           | not null | now()                        | plain    |             |              | 
+Indexes:
+    "submissions_pkey" PRIMARY KEY, btree (id)
+    "idx_submissions_self_check" btree (student_id, submitted_at) WHERE is_self_check = true
+    "idx_submissions_status" btree (status)
+    "idx_submissions_student" btree (student_id)
+    "idx_submissions_submitted_at" btree (submitted_at DESC)
+Check constraints:
+    "submissions_language_check" CHECK (language::text = ANY (ARRAY['c'::character varying, 'javascript'::character varying, 'python'::character varying, 'php'::character varying]::text[]))
+    "submissions_source_type_check" CHECK (source_type::text = ANY (ARRAY['git'::character varying, 'upload'::character varying]::text[]))
+    "submissions_source_url_not_blank" CHECK (length(TRIM(BOTH FROM source_url)) > 0)
+    "submissions_status_check" CHECK (status::text = ANY (ARRAY['pending'::character varying, 'processing'::character varying, 'complete'::character varying, 'failed'::character varying]::text[]))
+Foreign-key constraints:
+    "submissions_student_id_fkey" FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE
+Referenced by:
+    TABLE "commit_signals" CONSTRAINT "commit_signals_submission_id_fkey" FOREIGN KEY (submission_id) REFERENCES submissions(id) ON DELETE CASCADE
+    TABLE "fingerprints" CONSTRAINT "fingerprints_submission_id_fkey" FOREIGN KEY (submission_id) REFERENCES submissions(id) ON DELETE CASCADE
+    TABLE "originality_decisions" CONSTRAINT "originality_decisions_submission_id_fkey" FOREIGN KEY (submission_id) REFERENCES submissions(id) ON DELETE CASCADE
+    TABLE "provenance_flags" CONSTRAINT "provenance_flags_submission_id_fkey" FOREIGN KEY (submission_id) REFERENCES submissions(id) ON DELETE CASCADE
+    TABLE "risk_scores" CONSTRAINT "risk_scores_submission_id_fkey" FOREIGN KEY (submission_id) REFERENCES submissions(id) ON DELETE CASCADE
+    TABLE "similarity_cluster_members" CONSTRAINT "similarity_cluster_members_submission_id_fkey" FOREIGN KEY (submission_id) REFERENCES submissions(id) ON DELETE CASCADE
+Access method: heap
+
+
+                                                         Table "public.fingerprints"
+     Column      |           Type           | Collation | Nullable |      Default      | Storage  | Compression | Stats target | Description 
+-----------------+--------------------------+-----------+----------+-------------------+----------+-------------+--------------+-------------
+ id              | uuid                     |           | not null | gen_random_uuid() | plain    |             |              | 
+ submission_id   | uuid                     |           | not null |                   | plain    |             |              | 
+ file_path       | text                     |           | not null |                   | extended |             |              | 
+ hash_value      | bigint                   |           | not null |                   | plain    |             |              | 
+ window_position | integer                  |           | not null |                   | plain    |             |              | 
+ created_at      | timestamp with time zone |           | not null | now()             | plain    |             |              | 
+Indexes:
+    "fingerprints_pkey" PRIMARY KEY, btree (id)
+    "idx_fingerprints_hash" btree (hash_value)
+    "idx_fingerprints_submission" btree (submission_id)
+Check constraints:
+    "fingerprints_window_position_check" CHECK (window_position >= 0)
+Foreign-key constraints:
+    "fingerprints_submission_id_fkey" FOREIGN KEY (submission_id) REFERENCES submissions(id) ON DELETE CASCADE
+Access method: heap
+
+
+                                                       Table "public.commit_signals"
+    Column     |           Type           | Collation | Nullable |      Default      | Storage  | Compression | Stats target | Description 
+---------------+--------------------------+-----------+----------+-------------------+----------+-------------+--------------+-------------
+ id            | uuid                     |           | not null | gen_random_uuid() | plain    |             |              | 
+ submission_id | uuid                     |           | not null |                   | plain    |             |              | 
+ signal_type   | character varying(50)    |           | not null |                   | extended |             |              | 
+ severity      | character varying(10)    |           | not null |                   | extended |             |              | 
+ description   | text                     |           |          |                   | extended |             |              | 
+ detected_at   | timestamp with time zone |           | not null | now()             | plain    |             |              | 
+Indexes:
+    "commit_signals_pkey" PRIMARY KEY, btree (id)
+    "idx_commit_signals_submission" btree (submission_id)
+Check constraints:
+    "commit_signals_severity_check" CHECK (severity::text = ANY (ARRAY['low'::character varying, 'medium'::character varying, 'high'::character varying]::text[]))
+    "commit_signals_signal_type_check" CHECK (signal_type::text = ANY (ARRAY['big_bang_commit'::character varying, 'zombie_code'::character varying, 'low_message_entropy'::character varying]::text[]))
+Foreign-key constraints:
+    "commit_signals_submission_id_fkey" FOREIGN KEY (submission_id) REFERENCES submissions(id) ON DELETE CASCADE
+Access method: heap
+
+
+                                                      Table "public.provenance_flags"
+    Column     |           Type           | Collation | Nullable |      Default      | Storage  | Compression | Stats target | Description 
+---------------+--------------------------+-----------+----------+-------------------+----------+-------------+--------------+-------------
+ id            | uuid                     |           | not null | gen_random_uuid() | plain    |             |              | 
+ submission_id | uuid                     |           | not null |                   | plain    |             |              | 
+ flag_type     | character varying(50)    |           | not null |                   | extended |             |              | 
+ severity      | character varying(10)    |           | not null |                   | extended |             |              | 
+ description   | text                     |           |          |                   | extended |             |              | 
+ detected_at   | timestamp with time zone |           | not null | now()             | plain    |             |              | 
+Indexes:
+    "provenance_flags_pkey" PRIMARY KEY, btree (id)
+    "idx_provenance_flags_submission" btree (submission_id)
+Check constraints:
+    "provenance_flags_flag_type_check" CHECK (flag_type::text = ANY (ARRAY['author_committer_mismatch'::character varying, 'timestamp_anomaly'::character varying, 'embedded_authorship_marker'::character varying]::text[]))
+    "provenance_flags_severity_check" CHECK (severity::text = ANY (ARRAY['low'::character varying, 'medium'::character varying, 'high'::character varying]::text[]))
+Foreign-key constraints:
+    "provenance_flags_submission_id_fkey" FOREIGN KEY (submission_id) REFERENCES submissions(id) ON DELETE CASCADE
+Access method: heap
+
+
+                                                            Table "public.risk_scores"
+        Column         |           Type           | Collation | Nullable |      Default      | Storage  | Compression | Stats target | Description 
+-----------------------+--------------------------+-----------+----------+-------------------+----------+-------------+--------------+-------------
+ id                    | uuid                     |           | not null | gen_random_uuid() | plain    |             |              | 
+ submission_id         | uuid                     |           | not null |                   | plain    |             |              | 
+ risk_band             | character varying(10)    |           | not null |                   | extended |             |              | 
+ similarity_score      | real                     |           | not null |                   | plain    |             |              | 
+ commit_flag_count     | integer                  |           | not null | 0                 | plain    |             |              | 
+ provenance_flag_count | integer                  |           | not null | 0                 | plain    |             |              | 
+ computed_at           | timestamp with time zone |           | not null | now()             | plain    |             |              | 
+Indexes:
+    "risk_scores_pkey" PRIMARY KEY, btree (id)
+    "idx_risk_scores_band" btree (risk_band)
+    "risk_scores_submission_id_key" UNIQUE CONSTRAINT, btree (submission_id)
+Check constraints:
+    "risk_scores_commit_flags_nonnegative" CHECK (commit_flag_count >= 0)
+    "risk_scores_provenance_flags_nonnegative" CHECK (provenance_flag_count >= 0)
+    "risk_scores_risk_band_check" CHECK (risk_band::text = ANY (ARRAY['low'::character varying, 'medium'::character varying, 'high'::character varying]::text[]))
+    "risk_scores_similarity_nonnegative" CHECK (similarity_score >= 0::double precision)
+Foreign-key constraints:
+    "risk_scores_submission_id_fkey" FOREIGN KEY (submission_id) REFERENCES submissions(id) ON DELETE CASCADE
+Access method: heap
+
+
+                                                     Table "public.similarity_clusters"
+      Column      |           Type           | Collation | Nullable |      Default      | Storage | Compression | Stats target | Description 
+------------------+--------------------------+-----------+----------+-------------------+---------+-------------+--------------+-------------
+ id               | uuid                     |           | not null | gen_random_uuid() | plain   |             |              | 
+ similarity_score | real                     |           | not null |                   | plain   |             |              | 
+ created_at       | timestamp with time zone |           | not null | now()             | plain   |             |              | 
+Indexes:
+    "similarity_clusters_pkey" PRIMARY KEY, btree (id)
+Check constraints:
+    "similarity_clusters_similarity_score_check" CHECK (similarity_score >= 0::double precision AND similarity_score <= 1::double precision)
+Referenced by:
+    TABLE "similarity_cluster_members" CONSTRAINT "similarity_cluster_members_cluster_id_fkey" FOREIGN KEY (cluster_id) REFERENCES similarity_clusters(id) ON DELETE CASCADE
+Access method: heap
+
+
+                                 Table "public.similarity_cluster_members"
+    Column     | Type | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
+---------------+------+-----------+----------+---------+---------+-------------+--------------+-------------
+ cluster_id    | uuid |           | not null |         | plain   |             |              | 
+ submission_id | uuid |           | not null |         | plain   |             |              | 
+Indexes:
+    "similarity_cluster_members_pkey" PRIMARY KEY, btree (cluster_id, submission_id)
+    "idx_cluster_members_submission" btree (submission_id)
+Foreign-key constraints:
+    "similarity_cluster_members_cluster_id_fkey" FOREIGN KEY (cluster_id) REFERENCES similarity_clusters(id) ON DELETE CASCADE
+    "similarity_cluster_members_submission_id_fkey" FOREIGN KEY (submission_id) REFERENCES submissions(id) ON DELETE CASCADE
+Access method: heap
+
+
+                                                   Table "public.originality_decisions"
+    Column     |           Type           | Collation | Nullable |      Default      | Storage  | Compression | Stats target | Description 
+---------------+--------------------------+-----------+----------+-------------------+----------+-------------+--------------+-------------
+ id            | uuid                     |           | not null | gen_random_uuid() | plain    |             |              | 
+ submission_id | uuid                     |           | not null |                   | plain    |             |              | 
+ instructor_id | uuid                     |           | not null |                   | plain    |             |              | 
+ decision      | character varying(20)    |           | not null |                   | extended |             |              | 
+ decided_at    | timestamp with time zone |           | not null | now()             | plain    |             |              | 
+Indexes:
+    "originality_decisions_pkey" PRIMARY KEY, btree (id)
+    "idx_decisions_instructor" btree (instructor_id)
+    "originality_decisions_submission_id_key" UNIQUE CONSTRAINT, btree (submission_id)
+Check constraints:
+    "originality_decisions_decision_check" CHECK (decision::text = ANY (ARRAY['cleared'::character varying, 'under_review'::character varying, 'flagged'::character varying]::text[]))
+Foreign-key constraints:
+    "originality_decisions_instructor_id_fkey" FOREIGN KEY (instructor_id) REFERENCES users(id)
+    "originality_decisions_submission_id_fkey" FOREIGN KEY (submission_id) REFERENCES submissions(id) ON DELETE CASCADE
+Access method: heap
+
+
+-- extensions --
+ extname  | extversion 
+----------+------------
+ pgcrypto | 1.3
+ plpgsql  | 1.0
+(2 rows)
+
