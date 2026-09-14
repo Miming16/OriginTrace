@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import api from '../../api/axios';
 
 const NAV_ITEMS = [
   { key: 'dashboard', label: 'Dashboard', icon: 'dashboard' },
@@ -7,20 +8,6 @@ const NAV_ITEMS = [
   { key: 'courses', label: 'Courses', icon: 'school' },
   { key: 'flags', label: 'Flags', icon: 'flag' },
   { key: 'settings', label: 'Profile & Settings', icon: 'settings' },
-];
-
-const initialRequests = [
-  { id: 'r1', student: 'Alex Adams', course: 'CS101', type: 'Repository access', status: 'pending' },
-  { id: 'r2', student: 'Jamie Lopez', course: 'CS205', type: 'Collaborator invite', status: 'pending' },
-  { id: 'r3', student: 'D. Santos', course: 'CS302', type: 'Repository access', status: 'pending' },
-  { id: 'r4', student: 'M. Chen', course: 'CS302', type: 'Collaborator invite', status: 'pending' },
-];
-
-const SUBMISSIONS = [
-  { id: 1, name: 'Ethan Winters', course: 'CS302', assignment: 'Project 2', lang: 'Java', risk: 'High', flags: 4, time: '2d ago' },
-  { id: 2, name: 'Sarah Connor', course: 'CS101', assignment: 'Lab 5', lang: 'Python', risk: 'Medium', flags: 1, time: '4h ago' },
-  { id: 3, name: 'Arthur Adams', course: 'CS205', assignment: 'Assignment 3', lang: 'JavaScript', risk: 'Low', flags: 0, time: '1d ago' },
-  { id: 4, name: 'James Reyes', course: 'CS101', assignment: 'Lab 4', lang: 'C', risk: 'Medium', flags: 1, time: '6h ago' },
 ];
 
 const RISK_META = {
@@ -32,11 +19,86 @@ const RISK_META = {
 export default function InstructorDashboard() {
   const { user, logout } = useAuth();
   const [activeNav, setActiveNav] = useState('dashboard');
-  const [requests, setRequests] = useState(initialRequests);
-  const [selectedId, setSelectedId] = useState(1);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
-  const selected = SUBMISSIONS.find((s) => s.id === selectedId);
+  const [submissions, setSubmissions] = useState([]);
+  const [requests, setRequests] = useState([]);
+  const [selectedId, setSelectedId] = useState(null);
+  const [detailData, setDetailData] = useState(null);
+
+  const [loading, setLoading] = useState(true);
+  const [loadingDetail, setLoadingDetail] = useState(false);
+  const [updatingDecision, setUpdatingDecision] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    fetchSubmissions();
+  }, []);
+
+  async function fetchSubmissions() {
+    try {
+      setLoading(true);
+      const res = await api.get('/instructor/submissions');
+      const data = res.data || [];
+      setSubmissions(data);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to fetch submissions.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!selectedId) {
+      setDetailData(null);
+      return;
+    }
+
+    async function fetchSubmissionDetail() {
+      try {
+        setLoadingDetail(true);
+        const res = await api.get(`/instructor/submissions/${selectedId}`);
+        setDetailData(res.data);
+      } catch (err) {
+        console.error('Failed to load submission detail:', err);
+      } finally {
+        setLoadingDetail(false);
+      }
+    }
+
+    fetchSubmissionDetail();
+  }, [selectedId]);
+
+  async function handleDecision(status) {
+    if (!selectedId) return;
+
+    setUpdatingDecision(true);
+    try {
+      const res = await api.patch(`/instructor/submissions/${selectedId}`, { status });
+      const updatedStatus = res.data?.status || status;
+
+      setSubmissions((prev) =>
+        prev.map((sub) => (sub.id === selectedId ? { ...sub, status: updatedStatus } : sub))
+      );
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to update submission status.');
+    } finally {
+      setUpdatingDecision(false);
+    }
+  }
+
+  const selected = submissions.find((s) => s.id === selectedId);
+
+  const lowCount = submissions.filter((s) => s.risk === 'Low').length;
+  const mediumCount = submissions.filter((s) => s.risk === 'Medium').length;
+  const highCount = submissions.filter((s) => s.risk === 'High').length;
+
+  const kpis = [
+    { label: 'Total submissions', value: submissions.length, badge: 'dashboard' },
+    { label: 'High risk', value: highCount, badge: 'error' },
+    { label: 'Medium risk', value: mediumCount, badge: 'warning' },
+    { label: 'Low risk', value: lowCount, badge: 'check_circle' },
+  ];
 
   function acceptRequest(id) {
     setRequests((current) => current.filter((item) => item.id !== id));
@@ -45,13 +107,6 @@ export default function InstructorDashboard() {
   function declineRequest(id) {
     setRequests((current) => current.filter((item) => item.id !== id));
   }
-
-  const kpis = [
-    { label: 'Total submissions', value: '142', badge: 'dashboard' },
-    { label: 'High risk', value: '8', badge: 'error' },
-    { label: 'Medium risk', value: '24', badge: 'warning' },
-    { label: 'Low risk', value: '110', badge: 'check_circle' },
-  ];
 
   return (
     <div className={isSidebarCollapsed ? 'app-layout sidebar-collapsed' : 'app-layout'}>
@@ -82,7 +137,17 @@ export default function InstructorDashboard() {
 
       <main className="main-shell">
         <header className="topbar">
-          <h2>{activeNav === 'dashboard' ? 'Instructor Dashboard' : activeNav === 'collaborators' ? 'Collaborators' : activeNav === 'courses' ? 'Courses' : activeNav === 'flags' ? 'Flags' : 'Profile & Settings'}</h2>
+          <h2>
+            {activeNav === 'dashboard'
+              ? 'Instructor Dashboard'
+              : activeNav === 'collaborators'
+              ? 'Collaborators'
+              : activeNav === 'courses'
+              ? 'Courses'
+              : activeNav === 'flags'
+              ? 'Flags'
+              : 'Profile & Settings'}
+          </h2>
           <div className="topbar-tools">
             <span className="role-pill">Instructor</span>
             <div className="avatar-circle">PR</div>
@@ -92,6 +157,8 @@ export default function InstructorDashboard() {
         <div className="content-wrap">
           {activeNav === 'dashboard' && (
             <>
+              {error && <div className="error-banner">{error}</div>}
+
               <div className="stats-grid">
                 {kpis.map((stat) => (
                   <div key={stat.label} className="stat-card">
@@ -107,55 +174,138 @@ export default function InstructorDashboard() {
               <div className="panel">
                 <div className="panel-header">
                   <h3>Recent submissions</h3>
-                  <span className="muted">{SUBMISSIONS.length} shown</span>
+                  <span className="muted">{submissions.length} shown</span>
                 </div>
 
-                <div className="submission-table">
-                  {SUBMISSIONS.map((s) => (
-                    <div
-                      key={s.id}
-                      className={selectedId === s.id ? 'submission-row active' : 'submission-row'}
-                      onClick={() => setSelectedId(s.id)}
-                    >
-                      <div>
-                        <strong>{s.name}</strong>
-                        <p>{s.course} · {s.assignment} · {s.time}</p>
+                {loading ? (
+                  <p className="loading-state">Loading submissions...</p>
+                ) : submissions.length === 0 ? (
+                  <p className="empty-state">No submissions found.</p>
+                ) : (
+                  <div className="submission-table">
+                    {submissions.map((s) => (
+                      <div
+                        key={s.id}
+                        className={selectedId === s.id ? 'submission-row active' : 'submission-row'}
+                        onClick={() => setSelectedId(s.id)}
+                      >
+                        <div>
+                          <strong>{s.student || s.name || s.studentName}</strong>
+                          <p>
+                            {s.subject || s.course} · Status: <em>{s.status || 'Submitted'}</em> · {s.submittedDate || s.time || 'N/A'}
+                          </p>
+                        </div>
+                        <div className="submission-row-meta">
+                          {s.lang && <span className="lang-pill">{s.lang}</span>}
+                          {s.flagsCount !== undefined && <span className="flag-pill">{s.flagsCount} flags</span>}
+                          <span className={`risk-badge ${RISK_META[s.risk]?.cls || 'risk-low'}`}>
+                            {s.risk}
+                          </span>
+                        </div>
                       </div>
-                      <div className="submission-row-meta">
-                        <span className="lang-pill">{s.lang}</span>
-                        <span className="flag-pill">{s.flags} flags</span>
-                        <span className={`risk-badge ${RISK_META[s.risk].cls}`}>{s.risk}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
-              {selected && (
+              {selected ? (
                 <div className="panel detail-panel">
                   <div className="panel-header">
-                    <h3>{selected.name}</h3>
-                    <span className={`risk-badge ${RISK_META[selected.risk].cls}`}>{selected.risk}</span>
+                    <h3>{selected.student || selected.name || selected.studentName}</h3>
+                    <span className={`risk-badge ${RISK_META[selected.risk]?.cls || 'risk-low'}`}>
+                      {selected.risk}
+                    </span>
                   </div>
 
-                  <div className="detail-grid">
-                    <div className="detail-box">
-                      <h4>Matched fragments</h4>
-                      <p>Similarity cluster includes 2 peer submissions with 87% structural overlap.</p>
-                    </div>
-                    <div className="detail-box">
-                      <h4>Commit plausibility</h4>
-                      <p>3 commits over 1 day, author-committer mismatch detected, force-push observed.</p>
-                    </div>
-                    <div className="detail-box">
-                      <h4>Provenance</h4>
-                      <p>Consistent device pattern but large late-night burst before deadline.</p>
-                    </div>
-                    <div className="detail-box emphasis">
-                      <h4>Faculty verdict</h4>
-                      <p>Manual review recommended. Commit changes and provenance data are soft flags, not final findings.</p>
-                    </div>
-                  </div>
+                  {loadingDetail ? (
+                    <p className="loading-state">Loading submission detail...</p>
+                  ) : (
+                    <>
+                      <div className="detail-grid">
+                        {/* 1. Risk Band */}
+                        <div className="detail-box">
+                          <h4>Risk band</h4>
+                          <span className={`risk-badge ${RISK_META[selected.risk]?.cls || 'risk-low'}`}>
+                            {selected.risk}
+                          </span>
+                          <p>{detailData?.riskDescription || `Assigned ${selected.risk} risk level.`}</p>
+                        </div>
+
+                        <div className="detail-box">
+                          <h4>Matched fragments</h4>
+                          <p>
+                            {detailData?.matchedFragments ||
+                              `Similarity cluster includes structural overlap across code segments.`}
+                          </p>
+                        </div>
+
+                        <div className="detail-box">
+                          <h4>Peer overlaps</h4>
+                          <p>
+                            {detailData?.peerOverlaps ||
+                              `Matched against ${detailData?.peerCount || 0} peer submission(s).`}
+                          </p>
+                        </div>
+
+                        <div className="detail-box emphasis">
+                          <h4>Commit & Provenance flags</h4>
+                          {detailData?.flags && detailData.flags.length > 0 ? (
+                            <ul className="flags-list">
+                              {detailData.flags.map((flag, idx) => (
+                                <li key={idx}>
+                                  <strong className={`flag-type ${flag.type === 'hard' ? 'hard-flag' : 'soft-flag'}`}>
+                                    {flag.type === 'hard' ? 'hard flag' : 'soft flag'}:
+                                  </strong>{' '}
+                                  {flag.message}
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p>
+                              <span className="soft-flag">soft flag</span>: Minor commit variances observed.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Decision Buttons Section */}
+                      <div className="decision-section" style={{ marginTop: '1.5rem', paddingTop: '1rem', borderTop: '1px solid #eaecf0' }}>
+                        <div className="decision-buttons" style={{ display: 'flex', gap: '0.75rem', marginBottom: '0.5rem' }}>
+                          <button
+                            type="button"
+                            className="primary-button"
+                            disabled={updatingDecision}
+                            onClick={() => handleDecision('Cleared')}
+                          >
+                            Cleared
+                          </button>
+                          <button
+                            type="button"
+                            className="secondary-button"
+                            disabled={updatingDecision}
+                            onClick={() => handleDecision('Under review')}
+                          >
+                            Under review
+                          </button>
+                          <button
+                            type="button"
+                            className="danger-button"
+                            disabled={updatingDecision}
+                            onClick={() => handleDecision('Flagged')}
+                          >
+                            Flagged
+                          </button>
+                        </div>
+                        <p className="fairness-note" style={{ fontSize: '0.875rem', color: '#667085', italic: 'true' }}>
+                          <em>OriginTrace flags submissions for review. The final call is yours.</em>
+                        </p>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ) : (
+                <div className="panel detail-panel empty-detail">
+                  <p className="empty-state">Select a submission from the table above to view detail analysis.</p>
                 </div>
               )}
             </>
@@ -193,14 +343,13 @@ export default function InstructorDashboard() {
             <div className="panel">
               <div className="panel-header">
                 <h3>Course roster</h3>
-                <span className="muted">3 active courses</span>
+                <span className="muted">Active courses</span>
               </div>
               <div className="course-grid">
                 {['CS101', 'CS205', 'CS302'].map((course) => (
                   <div key={course} className="course-card">
                     <h4>{course}</h4>
                     <p>Introduction to Programming</p>
-                    <small>25 students · 4 flagged</small>
                   </div>
                 ))}
               </div>
@@ -214,9 +363,9 @@ export default function InstructorDashboard() {
                 <span className="muted">Human review required</span>
               </div>
               <div className="flag-list">
-                <div className="flag-row"><span>High risk</span><strong>8</strong></div>
-                <div className="flag-row"><span>Medium risk</span><strong>24</strong></div>
-                <div className="flag-row"><span>Low risk</span><strong>110</strong></div>
+                <div className="flag-row"><span>High risk</span><strong>{highCount}</strong></div>
+                <div className="flag-row"><span>Medium risk</span><strong>{mediumCount}</strong></div>
+                <div className="flag-row"><span>Low risk</span><strong>{lowCount}</strong></div>
               </div>
             </div>
           )}
