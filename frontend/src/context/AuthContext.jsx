@@ -1,23 +1,22 @@
 import { createContext, useContext, useState, useCallback } from 'react';
+import api, { setAuthToken } from '../api/axios';
 
 const AuthContext = createContext(null);
 
-const DEMO_USERS = {
-  student: { id: 's-1001', fullName: 'Alex Adams', role: 'student', email: 'alex@usjr.edu' },
-  instructor: { id: 'i-2001', fullName: 'Prof. Ramos', role: 'instructor', email: 'ramos@usjr.edu' },
-  admin: { id: 'a-3001', fullName: 'System Admin', role: 'admin', email: 'admin@usjr.edu' },
-};
-
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(DEMO_USERS.student);
+  const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const login = useCallback(async (email, password, role = 'student') => {
+  const login = useCallback(async (email, password) => {
     setLoading(true);
     try {
-      const demoUser = DEMO_USERS[role] || DEMO_USERS.student;
-      setUser(demoUser);
-      return demoUser;
+      const response = await api.post('/auth/login', { email, password });
+      const { token, user: userData } = response.data;
+      
+      setUser(userData);
+      setAuthToken(token);
+      
+      return userData;
     } finally {
       setLoading(false);
     }
@@ -25,6 +24,7 @@ export function AuthProvider({ children }) {
 
   const logout = useCallback(() => {
     setUser(null);
+    setAuthToken(null);
   }, []);
 
   return (
