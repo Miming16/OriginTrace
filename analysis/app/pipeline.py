@@ -14,6 +14,7 @@ import tree_sitter_python
 
 from .config import SUPPORTED_LANGUAGES
 
+HASH_MASK = 0x7FFF_FFFF_FFFF_FFFF
 SOURCE_EXTENSIONS = {"c": {".c", ".h"}, "java": {".java"}, "python": {".py"}, "php": {".php"}}
 IGNORED_PARTS = {".git", "node_modules", "vendor", "__pycache__", ".venv", "dist", "build"}
 BOILERPLATE_PATTERNS = (
@@ -67,7 +68,10 @@ def normalized_ast(source: str, language: str) -> list[str]:
 def winnow(values: list[str], k: int = 5, window: int = 4) -> list[dict]:
     if len(values) < k:
         return []
-    hashes = [int(hashlib.sha256("|".join(values[i:i + k]).encode()).hexdigest()[:16], 16) for i in range(len(values) - k + 1)]
+    hashes = [
+        int(hashlib.sha256("|".join(values[i:i + k]).encode()).hexdigest()[:16], 16) & HASH_MASK
+        for i in range(len(values) - k + 1)
+    ]
     selected: dict[int, int] = {}
     for start in range(max(1, len(hashes) - window + 1)):
         end = min(start + window, len(hashes))

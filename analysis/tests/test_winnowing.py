@@ -14,7 +14,7 @@ import random
 
 import pytest
 
-from app.pipeline import analyze_directory, remove_boilerplate, winnow
+from app.pipeline import HASH_MASK, analyze_directory, remove_boilerplate, winnow
 
 K = 5
 WINDOW = 4
@@ -26,7 +26,7 @@ def kgram_hashes(values: list[str], k: int = K) -> list[int]:
     """Recompute the k-gram hash array the way winnow() does, so the tests can
     check the selection rule without trusting winnow()'s own bookkeeping."""
     return [
-        int(hashlib.sha256("|".join(values[index:index + k]).encode()).hexdigest()[:16], 16)
+        int(hashlib.sha256("|".join(values[index:index + k]).encode()).hexdigest()[:16], 16) & HASH_MASK
         for index in range(len(values) - k + 1)
     ]
 
@@ -196,19 +196,16 @@ def test_a_file_with_no_boilerplate_reports_zero_exclusions(tmp_path):
 
 # --- Evidence for defects, not aspirations. -----------------------------------
 
-def test_defect_d02_winnow_emits_hashes_too_large_for_the_bigint_column():
-    """fingerprints.hash_value is a signed BIGINT (max 2^63-1) but winnow() takes
-    the top 64 bits of a sha256, so it emits unsigned values up to 2^64-1.
-    Min-hash selection biases the output low, which is why this is intermittent
-    rather than constant -- and why it was not caught by the existing tests."""
-    oversized = 0
+def test_winnow_never_exceeds_the_bigint_column():
+    """fingerprints.hash_value is a signed BIGINT (max 2**63 - 1). winnow() masks
+    the sha256 prefix to 63 bits, so no fingerprint can overflow the column and
+    roll back the whole save. Regression guard for D-02 -- do not delete."""
     total = 0
     for seed in range(40):
         for fingerprint in winnow(token_stream(300, seed=seed), k=K, window=WINDOW):
             total += 1
-            oversized += fingerprint["hash_value"] > INT64_MAX
+            assert 0 <= fingerprint["hash_value"] <= INT64_MAX
     assert total > 0
-    assert oversized > 0, "winnow no longer exceeds BIGINT -- D-02 can be closed"
 
 
 def test_defect_d07_window_position_is_absolute_so_an_insertion_shifts_every_later_record():
