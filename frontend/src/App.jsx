@@ -2,9 +2,9 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import ProtectedRoute from './routes/ProtectedRoute';
 
-// Stubs for now — built out in 1.5.1 (login) and 3.3 / 3.4 (dashboards).
 import LoginPage from './pages/LoginPage';
 import InstructorDashboard from './pages/instructor/Dashboard';
+import Subjects from './pages/instructor/Subjects'; // Added import
 import StudentSelfCheck from './pages/student/SelfCheck';
 import AdminPanel from './pages/admin/AdminPanel';
 
@@ -19,7 +19,10 @@ export default function App() {
             path="/instructor/*"
             element={
               <ProtectedRoute allowedRoles={['instructor']}>
-                <InstructorDashboard />
+                <Routes>
+                  <Route path="/" element={<InstructorDashboard />} />
+                  <Route path="subjects" element={<Subjects />} />
+                </Routes>
               </ProtectedRoute>
             }
           />
@@ -47,4 +50,4 @@ export default function App() {
       </BrowserRouter>
     </AuthProvider>
   );
-}
+}a
