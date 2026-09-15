@@ -3,8 +3,11 @@ import { AuthProvider } from './context/AuthContext';
 import ProtectedRoute from './routes/ProtectedRoute';
 
 import LoginPage from './pages/LoginPage';
+import InstructorLayout from './pages/instructor/InstructorLayout';
 import InstructorDashboard from './pages/instructor/Dashboard';
-import Subjects from './pages/instructor/Subjects'; // Added import
+import Subjects from './pages/instructor/Subjects';
+import ClusterListView from './pages/instructor/ClusterListView';
+import ClusterDetailView from './pages/instructor/ClusterDetailView';
 import StudentSelfCheck from './pages/student/SelfCheck';
 import AdminPanel from './pages/admin/AdminPanel';
 
@@ -16,16 +19,18 @@ export default function App() {
           <Route path="/login" element={<LoginPage />} />
 
           <Route
-            path="/instructor/*"
+            path="/instructor"
             element={
               <ProtectedRoute allowedRoles={['instructor']}>
-                <Routes>
-                  <Route path="/" element={<InstructorDashboard />} />
-                  <Route path="subjects" element={<Subjects />} />
-                </Routes>
+                <InstructorLayout />
               </ProtectedRoute>
             }
-          />
+          >
+            <Route index element={<InstructorDashboard />} />
+            <Route path="subjects" element={<Subjects />} />
+            <Route path="clusters" element={<ClusterListView />} />
+            <Route path="clusters/:clusterId" element={<ClusterDetailView />} />
+          </Route>
 
           <Route
             path="/student/*"
@@ -50,4 +55,4 @@ export default function App() {
       </BrowserRouter>
     </AuthProvider>
   );
-}a
+}
