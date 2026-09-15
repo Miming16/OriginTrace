@@ -28,6 +28,8 @@ LANGUAGE_MODULES = {
     "python": tree_sitter_python.language,
 }
 
+MEDIUM_OVERLAP = 0.35
+HIGH_OVERLAP = 0.60
 
 def validate_language(language: str) -> str:
     normalized = language.lower().strip()
@@ -122,3 +124,23 @@ def analyze_git_url(url: str, language: str) -> dict:
         if result.returncode != 0:
             raise ValueError("Repository could not be cloned")
         return analyze_directory(target, language)
+
+def risk_band(overlap: float, commit_signals: list[dict], provenance_flags: list[dict]) -> str:
+    """Overlap sets the band. Commit and provenance findings are soft flags:
+    together they raise it by at most one step and can never reach high alone."""
+    if overlap >= HIGH_OVERLAP:
+        band = "high"
+    elif overlap >= MEDIUM_OVERLAP:
+        band = "medium"
+    else:
+        band = "low"
+
+    soft = (
+        any(s["signal_type"] == "big_bang_commit" for s in commit_signals)
+        or any(f["severity"] == "high" for f in provenance_flags)
+    )
+    if soft and band == "low":
+        return "medium"
+    if soft and band == "medium":
+        return "high"
+    return band

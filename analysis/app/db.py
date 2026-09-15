@@ -5,7 +5,7 @@ from contextlib import contextmanager
 import psycopg
 
 from .config import DATABASE_URL
-
+from .pipeline import risk_band
 
 @contextmanager
 def connection():
@@ -32,13 +32,46 @@ def save_analysis(user_id: str, source_type: str, source_url: str, is_self_check
         for flag in result["provenance_flags"]:
             conn.execute("INSERT INTO provenance_flags (submission_id, flag_type, severity, description) VALUES (%s, %s, %s, %s)", (submission, flag["flag_type"], flag["severity"], flag["description"]))
         conn.execute("INSERT INTO risk_scores (submission_id, risk_band, similarity_score, commit_flag_count, provenance_flag_count) VALUES (%s, %s, %s, %s, %s)", (submission, result["risk_band"], result["similarity_score"], len(result["commit_signals"]), len(result["provenance_flags"])))
-        hashes = [fingerprint["hash_value"] for fingerprint in result["fingerprints"]]
-        matches = []
+        hashes = [f["hash_value"] for f in result["fingerprints"]]
+        matches, overlap = [], 0.0
         if hashes:
-            rows = conn.execute("SELECT DISTINCT submission_id FROM fingerprints WHERE hash_value = ANY(%s) AND submission_id <> %s", (hashes, submission)).fetchall()
-            matches = [str(row[0]) for row in rows]
+            rows = conn.execute(
+                """SELECT submission_id, count(*) AS shared
+                   FROM fingerprints
+                   WHERE hash_value = ANY(%s) AND submission_id <> %s
+                   GROUP BY submission_id
+                   ORDER BY shared DESC
+                   LIMIT 20""",
+                (hashes, submission),
+            ).fetchall()
+            matches = [
+                {"submission_id": str(peer), "shared": int(shared),
+                 "overlap": round(int(shared) / len(hashes), 4)}
+                for peer, shared in rows
+            ]
+            if matches:
+                overlap = matches[0]["overlap"]
+
+        band = risk_band(overlap, result["commit_signals"], result["provenance_flags"])
+
+        conn.execute(
+            """INSERT INTO risk_scores
+                   (submission_id, risk_band, similarity_score,
+                    commit_flag_count, provenance_flag_count)
+               VALUES (%s, %s, %s, %s, %s)""",
+            (submission, band, overlap,
+             len(result["commit_signals"]), len(result["provenance_flags"])),
+        )
+
         if matches:
-            cluster = conn.execute("INSERT INTO similarity_clusters (similarity_score) VALUES (%s) RETURNING id", (result["similarity_score"],)).fetchone()[0]
-            for member in [str(submission), *matches]:
-                conn.execute("INSERT INTO similarity_cluster_members (cluster_id, submission_id) VALUES (%s, %s)", (cluster, member))
-        return str(submission), matches
+            cluster = conn.execute(
+                "INSERT INTO similarity_clusters (similarity_score) VALUES (%s) RETURNING id",
+                (overlap,),
+            ).fetchone()[0]
+            for member in [str(submission), *[m["submission_id"] for m in matches]]:
+                conn.execute(
+                    "INSERT INTO similarity_cluster_members (cluster_id, submission_id) VALUES (%s, %s)",
+                    (cluster, member),
+                )
+
+        return str(submission), band, overlap, matches
