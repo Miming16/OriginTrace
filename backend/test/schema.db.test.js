@@ -24,12 +24,14 @@ after(async () => {
 
 const EXPECTED_TABLES = [
   'commit_signals',
+  'enrollments',
   'fingerprints',
   'originality_decisions',
   'provenance_flags',
   'risk_scores',
   'similarity_cluster_members',
   'similarity_clusters',
+  'subjects',
   'submissions',
   'users',
 ];
@@ -45,6 +47,10 @@ const EXPECTED_FOREIGN_KEYS = [
   ['similarity_cluster_members', 'submission_id', 'submissions', 'CASCADE'],
   ['originality_decisions', 'submission_id', 'submissions', 'CASCADE'],
   ['originality_decisions', 'instructor_id', 'users', 'NO ACTION'],
+  ['subjects', 'instructor_id', 'users', 'CASCADE'],
+  ['enrollments', 'student_id', 'users', 'CASCADE'],
+  ['enrollments', 'subject_id', 'subjects', 'CASCADE'],
+  ['submissions', 'subject_id', 'subjects', 'SET NULL'],
 ];
 
 // [table, distinctive fragment of the CHECK expression]
@@ -84,7 +90,7 @@ const EXPECTED_INDEXES = [
   'idx_decisions_instructor',
 ];
 
-test('migration creates exactly the nine tables it declares', { skip }, async () => {
+test('migration creates exactly the tables it declares', { skip }, async () => {
   const { rows } = await pool.query(
     `SELECT table_name FROM information_schema.tables
      WHERE table_schema = 'public' AND table_type = 'BASE TABLE'

@@ -4,8 +4,7 @@ import request from 'supertest';
 import { signUserToken } from '../src/auth.js';
 import { app } from '../src/app.js';
 
-const tokenFor = (role) => signUserToken({ id: `${role}-test`, role, email: `${role}@test.local` });
-
+const tokenFor = (role) =>  signUserToken({ id: '00000000-0000-0000-0000-000000000000', role, email: `${role}@test.local` });
 test('health endpoint is public', async () => {
   const response = await request(app).get('/api/health');
   assert.equal(response.status, 200);

@@ -154,7 +154,7 @@ test('every status code documented in 0.5_api_contract.yaml is reachable', { ski
 
 // --- Evidence for defects, not aspirations. -----------------------------------
 
-test('DEFECT D-03: /api/student/self-checks/quota is a constant, not a count', { skip }, async () => {
+test('quota counts today\'s self-checks and reaches zero at the limit', { skip }, async () => {
   const token = await tokenFor('student');
   const before = await request(app)
     .get('/api/student/self-checks/quota')
@@ -182,8 +182,8 @@ test('DEFECT D-03: /api/student/self-checks/quota is a constant, not a count', {
       .set('Authorization', `Bearer ${token}`);
     assert.deepEqual(
       after.body,
-      { limit: 3, used: 0, remaining: 3, window: 'daily' },
-      'the endpoint appears to have been implemented -- D-03 can be closed',
+      { limit: 3, used: 3, remaining: 0, window: 'daily' },
+      'quota must count real self-checks, not return a constant',
     );
   } finally {
     await pool.query(

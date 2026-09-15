@@ -106,7 +106,7 @@ def analyze_directory(root: Path, language: str) -> dict:
         source = path.read_text(encoding="utf-8", errors="ignore")
         filtered = remove_boilerplate(source)
         excluded += len(source.splitlines()) - len(filtered.splitlines())
-        fingerprints.extend({"file_path": str(path.relative_to(root)), **fingerprint} for fingerprint in winnow(normalized_ast(filtered, language)))
+        fingerprints.extend({"file_path": path.relative_to(root).as_posix(), **fingerprint} for fingerprint in winnow(normalized_ast(filtered, language)))
     commit_flags = git_signals(root)
     provenance_flags = [{"flag_type": flag["signal_type"], "severity": flag["severity"], "description": flag["description"]} for flag in commit_flags if flag["signal_type"] == "author_committer_mismatch"]
     similarity_score = min(1.0, len(fingerprints) / 1000)

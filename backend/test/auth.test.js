@@ -2,8 +2,8 @@
 //
 // Complements the five pre-existing tests in routes.test.js by covering the
 // rejection paths: tokens the service must refuse, header shapes it must refuse,
-// and the role matrix. Nothing here touches PostgreSQL, so it runs in plain
-// `npm test`.
+// and the role matrix. The quota route now reads PostgreSQL, so DATABASE_URL must
+// be set for the tests that expect a 200 from it.
 
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -13,8 +13,10 @@ import { app } from '../src/app.js';
 import { config } from '../src/config.js';
 import { signUserToken } from '../src/auth.js';
 
+const FAKE_ID = '00000000-0000-0000-0000-000000000000';
+
 const tokenFor = (role) =>
-  signUserToken({ id: `${role}-test`, role, email: `${role}@test.local` });
+  signUserToken({ id: FAKE_ID, role, email: `${role}@test.local` });
 
 const PROTECTED_ROUTES = ['/api/instructor/submissions', '/api/student/self-checks/quota'];
 
@@ -52,7 +54,7 @@ test('an expired token is rejected even though it is correctly signed', async ()
 });
 
 test('a token with no expiry claim is still accepted (records current behaviour)', async () => {
-  const everlasting = jwt.sign({ sub: 'student-test', role: 'student' }, config.jwtSecret);
+      const everlasting = jwt.sign({ sub: FAKE_ID, role: 'student' }, config.jwtSecret);
   const response = await request(app)
     .get('/api/student/self-checks/quota')
     .set('Authorization', `Bearer ${everlasting}`);
@@ -97,7 +99,7 @@ test('a token carrying no role claim is forbidden, not merely unauthorised', asy
 
 test('signUserToken puts sub, role and email in the payload and expires in 8h', async () => {
   const decoded = jwt.verify(tokenFor('student'), config.jwtSecret);
-  assert.equal(decoded.sub, 'student-test');
+  assert.equal(decoded.sub, FAKE_ID);
   assert.equal(decoded.role, 'student');
   assert.equal(decoded.email, 'student@test.local');
   assert.equal(decoded.exp - decoded.iat, 8 * 60 * 60);

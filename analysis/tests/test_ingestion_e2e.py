@@ -334,13 +334,14 @@ def test_extension_filtering_is_per_language(tmp_path):
 
 # --- Evidence for defects, not aspirations. -----------------------------------
 
-def test_defect_d02_a_normal_sized_submission_returns_500(client, student):
-    """The single most serious Phase 1 finding. Any submission whose fingerprint
-    set contains a hash above 2^63-1 -- which a twelve-function file already
-    does -- aborts save_analysis with an unhandled psycopg error, so the client
-    gets a 500 and nothing is stored."""
-    oversized = [f for f in pipeline.winnow(pipeline.normalized_ast(LARGE_SOURCE, "python")) if f["hash_value"] > INT64_MAX]
-    assert oversized, "fixture no longer overflows; pick a larger one before trusting this test"
+def test_a_normal_sized_submission_is_stored_and_returns_200(client, student):
+    """Regression guard for D-02. winnow() masks every hash to 63 bits, so a
+    normal-sized file fits fingerprints.hash_value (signed BIGINT) and saves
+    instead of rolling the whole transaction back with a 500."""
+    fingerprints = pipeline.winnow(pipeline.normalized_ast(LARGE_SOURCE, "python"))
+    assert fingerprints, "fixture produced no fingerprints"
+    assert all(0 <= f["hash_value"] <= INT64_MAX for f in fingerprints), \
+        "winnow emitted a value too large for the BIGINT column"
 
     response = client.post(
         "/api/analyze",
@@ -348,13 +349,16 @@ def test_defect_d02_a_normal_sized_submission_returns_500(client, student):
         files=upload("large.py", LARGE_SOURCE),
         headers=auth(student, "student"),
     )
-    assert response.status_code == 500, "the endpoint now survives a normal file -- D-02 can be closed"
+    assert response.status_code == 200, response.text
 
     with psycopg.connect(DATABASE_URL) as conn:
         stored = conn.execute(
-            "SELECT count(*) FROM submissions WHERE student_id = %s", (student,)
+            """SELECT count(*) FROM fingerprints f
+               JOIN submissions s ON s.id = f.submission_id
+               WHERE s.student_id = %s""",
+            (student,),
         ).fetchone()[0]
-    assert stored == 0, "a partial submission was left behind by the failed save"
+    assert stored > 0, "no fingerprints were stored -- the save rolled back"
 
 
 def test_defect_d08_a_zip_upload_is_stored_with_zero_files(client, student):
