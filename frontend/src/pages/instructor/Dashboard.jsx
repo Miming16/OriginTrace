@@ -39,7 +39,7 @@ export default function InstructorDashboard() {
     try {
       setLoading(true);
       const res = await api.get('/instructor/submissions');
-      const data = res.data || [];
+      const data = res.data?.submissions || [];
       setSubmissions(data);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to fetch submissions.');
@@ -112,7 +112,7 @@ export default function InstructorDashboard() {
     <div className={isSidebarCollapsed ? 'app-layout sidebar-collapsed' : 'app-layout'}>
       <aside className="sidebar">
         <button type="button" className="brand-toggle" onClick={() => setIsSidebarCollapsed((value) => !value)} aria-label="Toggle sidebar">
-          <img src="/origintrace-logo.svg" alt="OriginTrace logo" className="brand-logo mini-logo" />
+          <img src="/origintrace-logo-home.png" alt="OriginTrace logo" className="brand-logo mini-logo" />
           <span className="brand-text">OriginTrace</span>
         </button>
 
