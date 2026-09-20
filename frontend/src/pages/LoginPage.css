@@ -1,64 +1,93 @@
-.login-page {
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #f4f3ef;
+.login-card-panel {
+  width: min(100%, 430px);
+  padding: 38px 40px 42px;
+  border-radius: 18px;
 }
 
-.login-card {
-  width: 320px;
-  padding: 32px;
+.brand-block {
+  margin-bottom: 30px;
+}
+
+.login-logo {
+  width: 10px;
+  margin: 0 auto;
+  background: transparent;
+  filter: none;
+}
+
+.login-form {
+  display: grid;
+  gap: 18px;
+}
+
+.form-group {
+  display: grid;
+  gap: 7px;
+}
+
+.form-group label {
+  color: var(--primary);
+  font-size: 0.83rem;
+  font-weight: 700;
+}
+
+.form-group input {
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 14px;
+  border: 1px solid #cfd9e7;
+  border-radius: 9px;
+  background: #fbfdff;
+  color: var(--primary);
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.form-group input::placeholder {
+  color: #94a3b8;
+}
+
+.form-group input:focus {
+  border-color: var(--brand);
   background: #ffffff;
-  border: 0.5px solid #d3d1c7;
-  border-radius: 12px;
-  display: flex;
-  flex-direction: column;
+  box-shadow: 0 0 0 4px rgba(43, 111, 231, 0.12);
 }
 
-.login-title {
-  font-size: 20px;
-  font-weight: 600;
-  margin: 0 0 4px;
-}
-
-.login-subtitle {
-  font-size: 13px;
-  color: #5F5E5A;
-  margin: 0 0 20px;
-}
-
-.login-label {
-  font-size: 12px;
-  color: #5F5E5A;
-  margin-bottom: 4px;
-}
-
-.login-input {
-  padding: 8px 10px;
-  margin-bottom: 16px;
-  border: 0.5px solid #d3d1c7;
-  border-radius: 6px;
-  font-size: 14px;
-}
-
-.login-error {
-  font-size: 12px;
-  color: #b3261e;
-  margin: -8px 0 12px;
+.error-message {
+  padding: 11px 13px;
+  border: 1px solid #fecaca;
+  border-radius: 9px;
+  background: #fff1f2;
+  color: #b42318;
+  font-size: 0.82rem;
+  line-height: 1.4;
 }
 
 .login-button {
-  padding: 10px;
-  border: none;
-  border-radius: 6px;
-  background: #185FA5;
+  width: 100%;
+  min-height: 48px;
+  margin-top: 4px;
+  border: 0;
+  border-radius: 9px;
+  background: var(--brand);
   color: #ffffff;
-  font-size: 14px;
-  cursor: pointer;
+  font-size: 0.95rem;
+  font-weight: 700;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.login-button:hover:not(:disabled) {
+  background: var(--brand-strong);
+  transform: translateY(-1px);
 }
 
 .login-button:disabled {
-  opacity: 0.6;
+  opacity: 0.65;
   cursor: not-allowed;
+}
+
+@media (max-width: 480px) {
+  .login-card-panel {
+    padding: 30px 22px 34px;
+  }
 }

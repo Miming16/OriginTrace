@@ -63,7 +63,7 @@ button {
   align-items: center;
   justify-content: center;
   gap: 12px;
-  margin-bottom: 28px;
+  margin-bottom: 1px;
   text-align: center;
 }
 
@@ -75,8 +75,8 @@ button {
 }
 
 .login-logo {
-  width: 260px;
-  margin: 0 auto 10px;
+  width: 150px;
+  margin: 0 auto;
 }
 
 .mini-logo {

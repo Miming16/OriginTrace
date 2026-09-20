@@ -20,7 +20,7 @@ The recommended Docker setup installs the API and analysis-service dependencies 
 2. Open PowerShell in the repository root:
 
 ```powershell
-cd "C:\Users\enote\OneDrive\Documents\Capstone"
+cd "C:\Users\Capstone"
 ```
 
 3. On the first run, or after schema changes, recreate the database volume:

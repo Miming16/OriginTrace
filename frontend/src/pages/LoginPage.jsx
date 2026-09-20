@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import './LoginPage.css';
 
 const ROLE_HOME = {
   student: '/student',
@@ -44,6 +45,7 @@ export default function LoginPage() {
             <input
               id="email"
               type="email"
+              placeholder="you@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
@@ -56,6 +58,7 @@ export default function LoginPage() {
             <input
               id="password"
               type="password"
+              placeholder="Enter your password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required

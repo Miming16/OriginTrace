@@ -6,8 +6,6 @@ import LoginPage from './pages/LoginPage';
 import InstructorLayout from './pages/instructor/InstructorLayout';
 import InstructorDashboard from './pages/instructor/Dashboard';
 import Subjects from './pages/instructor/Subjects';
-import ClusterListView from './pages/instructor/ClusterListView';
-import ClusterDetailView from './pages/instructor/ClusterDetailView';
 import StudentSelfCheck from './pages/student/SelfCheck';
 import AdminPanel from './pages/admin/AdminPanel';
 
@@ -28,8 +26,6 @@ export default function App() {
           >
             <Route index element={<InstructorDashboard />} />
             <Route path="subjects" element={<Subjects />} />
-            <Route path="clusters" element={<ClusterListView />} />
-            <Route path="clusters/:clusterId" element={<ClusterDetailView />} />
           </Route>
 
           <Route
