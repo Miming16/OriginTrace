@@ -7,15 +7,16 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const login = useCallback(async (email, password) => {
+  const login = useCallback(async (idNumber, password) => {
     setLoading(true);
     try {
-      const response = await api.post('/auth/login', { email, password });
+      // Every role logs in with idNumber now — no email-based path.
+      const response = await api.post('/auth/login', { idNumber, password });
       const { token, user: userData } = response.data;
-      
+
       setUser(userData);
       setAuthToken(token);
-      
+
       return userData;
     } finally {
       setLoading(false);

@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import './LoginPage.css';
 
 const ROLE_HOME = {
   student: '/student',
@@ -10,7 +9,9 @@ const ROLE_HOME = {
 };
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('');
+  // Every role (student, instructor, admin) logs in with a numeric ID
+  // number now — there is no email-based login path at all.
+  const [idNumber, setIdNumber] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
@@ -22,11 +23,13 @@ export default function LoginPage() {
     setError('');
 
     try {
-      const user = await login(email, password);
-      const destination = ROLE_HOME[user?.role] || '/student';
+      const user = await login(idNumber, password);
+      // Fallback is '/login', not any specific role's home — an
+      // unrecognized role should never be quietly granted access.
+      const destination = ROLE_HOME[user?.role] || '/login';
       navigate(destination, { replace: true });
     } catch (err) {
-      setError(err.response?.data?.message || 'Invalid email or password.');
+      setError(err.response?.data?.message || 'Invalid ID number or password.');
     }
   }
 
@@ -41,13 +44,15 @@ export default function LoginPage() {
           {error && <div className="error-message">{error}</div>}
 
           <div className="form-group">
-            <label htmlFor="email">Email</label>
+            <label htmlFor="idNumber">ID Number</label>
             <input
-              id="email"
-              type="email"
-              placeholder="you@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              id="idNumber"
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={idNumber}
+              onChange={(e) => setIdNumber(e.target.value)}
+              placeholder="e.g. 2023001234"
               required
               disabled={loading}
             />
@@ -58,7 +63,6 @@ export default function LoginPage() {
             <input
               id="password"
               type="password"
-              placeholder="Enter your password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
