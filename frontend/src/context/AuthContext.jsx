@@ -10,7 +10,6 @@ export function AuthProvider({ children }) {
   const login = useCallback(async (idNumber, password) => {
     setLoading(true);
     try {
-      // Every role logs in with idNumber now — no email-based path.
       const response = await api.post('/auth/login', { idNumber, password });
       const { token, user: userData } = response.data;
 

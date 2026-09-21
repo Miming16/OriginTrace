@@ -9,8 +9,6 @@ const ROLE_HOME = {
 };
 
 export default function LoginPage() {
-  // Every role (student, instructor, admin) logs in with a numeric ID
-  // number now — there is no email-based login path at all.
   const [idNumber, setIdNumber] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -24,8 +22,6 @@ export default function LoginPage() {
 
     try {
       const user = await login(idNumber, password);
-      // Fallback is '/login', not any specific role's home — an
-      // unrecognized role should never be quietly granted access.
       const destination = ROLE_HOME[user?.role] || '/login';
       navigate(destination, { replace: true });
     } catch (err) {
