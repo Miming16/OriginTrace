@@ -68,7 +68,6 @@ def save_analysis(user_id: str, source_type: str, source_url: str, is_self_check
                 )
         for flag in result["provenance_flags"]:
             conn.execute("INSERT INTO provenance_flags (submission_id, flag_type, severity, description) VALUES (%s, %s, %s, %s)", (submission, flag["flag_type"], flag["severity"], flag["description"]))
-        conn.execute("INSERT INTO risk_scores (submission_id, risk_band, similarity_score, commit_flag_count, provenance_flag_count) VALUES (%s, %s, %s, %s, %s)", (submission, result["risk_band"], result["similarity_score"], len(result["commit_signals"]), len(result["provenance_flags"])))
         hashes = [f["hash_value"] for f in result["fingerprints"]]
         matches, overlap = [], 0.0
         if hashes:

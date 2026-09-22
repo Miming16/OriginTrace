@@ -250,8 +250,10 @@ def test_a_git_url_is_cloned_analysed_and_stored(client, student, git_repository
         "risk_band",
         "files_included",
         "boilerplate_lines_excluded",
-        "commit_signal_count",
-        "provenance_flag_count",
+        "similarity_score",
+        "commit_metrics",
+        "commit_signals",
+        "provenance_flags",
         "similarity_cluster_members",
     }
     assert body["files_included"] == 1

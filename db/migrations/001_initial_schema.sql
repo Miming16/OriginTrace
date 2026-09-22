@@ -82,7 +82,7 @@ CREATE TABLE provenance_flags (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     submission_id   UUID NOT NULL REFERENCES submissions(id) ON DELETE CASCADE,
     flag_type       VARCHAR(50) NOT NULL
-                        CHECK (flag_type IN ('author_committer_mismatch', 'timestamp_anomaly', 'embedded_authorship_marker')),
+                        CHECK (flag_type IN ('author_committer_mismatch', 'timestamp_anomaly', 'embedded_authorship_marker', 'orphan_commit')),
     severity        VARCHAR(10) NOT NULL CHECK (severity IN ('low', 'medium', 'high')),
     description     TEXT,
     detected_at     TIMESTAMPTZ NOT NULL DEFAULT now()

@@ -83,26 +83,27 @@ def winnow(values: list[str], k: int = 5, window: int = 4) -> list[dict]:
     return [{"hash_value": value, "window_position": position} for position, value in selected.items()]
 
 
-def git_signals(root: Path, final_lines: int) -> tuple[list[dict], dict]:
+def git_signals(root: Path, final_lines: int) -> tuple[list[dict], list[dict], dict]:
     try:
         log = subprocess.run(
-            ["git", "-C", str(root), "log", "--numstat", "--format=%H%x09%aI%x09%an%x09%ae%x09%cn%x09%ce%x09%s", "-n", "50"],
+            ["git", "-C", str(root), "log", "--numstat", "--format=%H%x09%P%x09%aI%x09%an%x09%ae%x09%cn%x09%ce%x09%s", "-n", "50"],
             capture_output=True, text=True, timeout=10, check=False,
         )
     except (OSError, subprocess.TimeoutExpired):
-        return ([{"signal_type": "low_message_entropy", "severity": "medium", "description": "Git history could not be read."}], {
+        return ([{"signal_type": "low_message_entropy", "severity": "medium", "description": "Git history could not be read."}], [], {
             "commit_count": 0, "timespan_days": 0, "has_big_bang": False,
             "low_entropy_count": 0, "author_committer_match_pct": 100.0,
         })
     commits = []
     current = None
     for line in log.stdout.splitlines():
-        fields = line.split("\t", 6)
-        if len(fields) == 7 and len(fields[0]) == 40 and "T" in fields[1]:
+        fields = line.split("\t", 7)
+        if len(fields) == 8 and len(fields[0]) == 40 and "T" in fields[2]:
             current = {
-                "date": fields[1], "author": fields[2], "author_email": fields[3],
-                "committer": fields[4], "committer_email": fields[5],
-                "message": fields[6], "changed_lines": 0,
+            "parents": fields[1].split() if fields[1] else [], "date": fields[2],
+            "author": fields[3], "author_email": fields[4],
+            "committer": fields[5], "committer_email": fields[6],
+            "message": fields[7], "changed_lines": 0,
             }
             commits.append(current)
         elif current and line.count("\t") == 2:
@@ -130,31 +131,42 @@ def git_signals(root: Path, final_lines: int) -> tuple[list[dict], dict]:
         "author_committer_match_pct": author_committer_match_pct,
     }
     signals = []
+    provenance_flags = []
     if commit_count <= 1 or has_big_bang:
         signals.append({"signal_type": "big_bang_commit", "severity": "medium", "description": "Repository has little or no development history."})
     if commit_count and low_entropy_count / commit_count > 0.5:
         signals.append({"signal_type": "low_message_entropy", "severity": "low", "description": "A high proportion of commit messages are unusually short."})
     if author_committer_match_pct < 100:
-        signals.append({"signal_type": "author_committer_mismatch", "severity": "medium", "description": "At least one commit author differs from its committer."})
-    return signals, metrics
+        provenance_flags.append({"flag_type": "author_committer_mismatch", "severity": "medium", "description": "At least one commit author differs from its committer."})
+    timestamps = [commit["date"] for commit in commits]
+    backwards = any(left < right for left, right in zip(timestamps, timestamps[1:]))
+    identical = commit_count > 1 and len(set(timestamps)) == 1
+    if backwards or identical:
+        reason = "Commit timestamps run backwards." if backwards else "All commits share one timestamp."
+        provenance_flags.append({"flag_type": "timestamp_anomaly", "severity": "high", "description": reason})
+    if commit_count == 1 and not commits[0]["parents"]:
+        provenance_flags.append({"flag_type": "orphan_commit", "severity": "high", "description": "Repository contains a single root commit with no development history."})
+    return signals, provenance_flags, metrics
 
 
-def analyze_directory(root: Path, language: str) -> dict:
+def analyze_directory(root: Path, language: str, overlap: float = 0.0) -> dict:
     language = validate_language(language)
     files = source_files(root, language)
+    sources = {
+        path: path.read_text(encoding="utf-8", errors="ignore")
+        for path in files
+    }
     fingerprints = []
     excluded = 0
     for path in files:
-        source = path.read_text(encoding="utf-8", errors="ignore")
+        source = sources[path]
         filtered = remove_boilerplate(source)
         excluded += len(source.splitlines()) - len(filtered.splitlines())
         fingerprints.extend({"file_path": path.relative_to(root).as_posix(), **fingerprint} for fingerprint in winnow(normalized_ast(filtered, language)))
-    commit_flags, commit_metrics = git_signals(root, sum(len(path.read_text(encoding="utf-8", errors="ignore").splitlines()) for path in files))
-    provenance_flags = [{"flag_type": flag["signal_type"], "severity": flag["severity"], "description": flag["description"]} for flag in commit_flags if flag["signal_type"] == "author_committer_mismatch"]
-    similarity_score = min(1.0, len(fingerprints) / 1000)
-    score = similarity_score + 0.15 * len(commit_flags) + 0.15 * len(provenance_flags)
-    risk_band = "high" if score >= 0.75 else "medium" if score >= 0.35 else "low"
-    return {"language": language, "files_included": len(files), "boilerplate_lines_excluded": excluded, "fingerprints": fingerprints, "commit_signals": commit_flags, "commit_metrics": commit_metrics, "provenance_flags": provenance_flags, "similarity_score": round(similarity_score, 4), "risk_band": risk_band}
+    final_lines = sum(len(source.splitlines()) for source in sources.values())
+    commit_flags, provenance_flags, commit_metrics = git_signals(root, final_lines)
+    risk_band_value = risk_band(overlap, commit_flags, provenance_flags)
+    return {"language": language, "files_included": len(files), "boilerplate_lines_excluded": excluded, "fingerprints": fingerprints, "commit_signals": commit_flags, "commit_metrics": commit_metrics, "provenance_flags": provenance_flags, "similarity_score": 0.0, "risk_band": risk_band_value}
 
 
 def analyze_git_url(url: str, language: str) -> dict:

@@ -14,7 +14,7 @@ import psycopg
 import pytest
 
 from app.config import DATABASE_URL
-from app.pipeline import analyze_directory
+from app.pipeline import analyze_directory, risk_band
 
 MANY_FUNCTIONS = "\n".join(f"def function_{index}(alpha, bravo):\n    return alpha + bravo\n" for index in range(20))
 FEW_CLASSES = "\n".join(
@@ -75,11 +75,13 @@ def test_commit_history_metrics_distinguish_single_and_multi_commit_repositories
     (multi / "module.py").write_text("\n".join(f"def function_{index}():\n    return {index}" for index in range(10)), encoding="utf-8")
     commit(multi, "Add remaining functions", "2026-01-03T00:00:00+00:00")
 
-    single_metrics = analyze_directory(single, "python")["commit_metrics"]
+    single_result = analyze_directory(single, "python")
+    single_metrics = single_result["commit_metrics"]
     multi_metrics = analyze_directory(multi, "python")["commit_metrics"]
 
     assert single_metrics["commit_count"] == 1
     assert single_metrics["has_big_bang"] is True
+    assert any(flag["flag_type"] == "orphan_commit" for flag in single_result["provenance_flags"])
     assert multi_metrics == {
         "commit_count": 2,
         "timespan_days": 2.0,
@@ -89,19 +91,29 @@ def test_commit_history_metrics_distinguish_single_and_multi_commit_repositories
     }
 
 
+def test_identical_timestamps_and_orphan_root_are_hard_provenance_flags(tmp_path):
+    repository = write(tmp_path, "suspicious", "def answer():\n    return 42\n")
+    subprocess.run(["git", "init", "-q", "-b", "main"], cwd=repository, check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "student@origintrace.test"], cwd=repository, check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Student"], cwd=repository, check=True, capture_output=True)
+    environment = {**__import__("os").environ, "GIT_AUTHOR_DATE": "2026-01-01T00:00:00+00:00", "GIT_COMMITTER_DATE": "2026-01-01T00:00:00+00:00"}
+    subprocess.run(["git", "add", "-A"], cwd=repository, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-q", "-m", "start"], cwd=repository, env=environment, check=True, capture_output=True)
+    (repository / "module.py").write_text("def answer():\n    return 43\n", encoding="utf-8")
+    subprocess.run(["git", "add", "-A"], cwd=repository, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-q", "-m", "update"], cwd=repository, env=environment, check=True, capture_output=True)
+
+    result = analyze_directory(repository, "python")
+    flags = {flag["flag_type"]: flag for flag in result["provenance_flags"]}
+    assert flags["timestamp_anomaly"]["severity"] == "high"
+    assert "orphan_commit" not in flags
+
+
 def test_the_risk_band_matches_the_score_it_is_derived_from(tmp_path):
-    """Internal consistency: band = f(similarity_score, flag counts), with the
-    boundaries the pipeline uses. A drift between the two would silently
-    mis-colour every row on the instructor dashboard."""
+    """With no peer submissions, the pipeline delegates to the shared band rule."""
     for name, body in (("many", MANY_FUNCTIONS), ("few", FEW_CLASSES)):
         result = analyze_directory(write(tmp_path, name, body), "python")
-        score = (
-            result["similarity_score"]
-            + 0.15 * len(result["commit_signals"])
-            + 0.15 * len(result["provenance_flags"])
-        )
-        expected = "high" if score >= 0.75 else "medium" if score >= 0.35 else "low"
-        assert result["risk_band"] == expected, f"{name}: band {result['risk_band']} does not match score {score:.4f}"
+        assert result["risk_band"] == risk_band(0.0, result["commit_signals"], result["provenance_flags"])
 
 
 def test_a_directory_with_no_matching_source_files_still_returns_a_record(tmp_path):
@@ -117,31 +129,9 @@ def test_a_directory_with_no_matching_source_files_still_returns_a_record(tmp_pa
 
 # --- Evidence for defects, not aspirations. -----------------------------------
 
-def test_defect_d18_similarity_score_measures_volume_not_similarity(tmp_path):
-    """risk_scores.similarity_score and similarity_clusters.similarity_score are
-    both fed by min(1.0, len(fingerprints) / 1000) -- a proxy for how much code
-    was submitted. It never consults any other submission, so two files that
-    share nothing at all still get non-zero 'similarity', and the larger one
-    scores higher purely for being larger."""
-    large = analyze_directory(write(tmp_path, "large", MANY_FUNCTIONS), "python")
-    small = analyze_directory(write(tmp_path, "small", FEW_CLASSES), "python")
-
-    shared = {f["hash_value"] for f in large["fingerprints"]} & {f["hash_value"] for f in small["fingerprints"]}
-    assert shared == set(), "the fixtures accidentally overlap; pick different ones"
-
-    assert large["similarity_score"] == round(min(1.0, len(large["fingerprints"]) / 1000), 4)
-    assert small["similarity_score"] == round(min(1.0, len(small["fingerprints"]) / 1000), 4)
-    assert large["similarity_score"] > small["similarity_score"] > 0, (
-        "similarity_score is no longer a pure function of fingerprint count -- D-18 can be closed"
-    )
-
-
 @pytest.mark.skipif(not DATABASE_URL, reason="DATABASE_URL is not set")
-def test_defect_d17_commit_flag_count_overcounts_the_rows_it_stores(tmp_path):
-    """save_analysis() moves author_committer_mismatch out of commit_signals and
-    into provenance_flags, but still sets risk_scores.commit_flag_count to the
-    length of the original list. The stored count is then larger than the number
-    of commit_signals rows an instructor could actually be shown."""
+def test_commit_flag_count_matches_stored_commit_signal_rows(tmp_path):
+    """Provenance flags are stored separately from commit-signal rows."""
     from app.db import save_analysis
 
     repository = write(tmp_path, "repo", MANY_FUNCTIONS)
@@ -180,9 +170,7 @@ def test_defect_d17_commit_flag_count_overcounts_the_rows_it_stores(tmp_path):
                 "SELECT commit_flag_count FROM risk_scores WHERE submission_id = %s", (submission_id,)
             ).fetchone()[0]
         assert recorded_count == len(result["commit_signals"])
-        assert stored_rows == recorded_count - 1, (
-            "the count and the rows agree now -- D-17 can be closed"
-        )
+        assert stored_rows == recorded_count
     finally:
         with psycopg.connect(DATABASE_URL) as conn:
             conn.execute("DELETE FROM users WHERE id = %s", (user_id,))

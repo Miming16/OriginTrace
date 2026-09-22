@@ -56,7 +56,7 @@ async def analyze(
             raise HTTPException(status_code=404, detail=str(error)) from error
         except RuntimeError as error:
             raise HTTPException(status_code=409, detail=str(error)) from error
-    if is_self_check and student_checks_used(user["sub"] if "sub" in user else user["user_id"]) >= SELF_CHECK_LIMIT:
+    if is_self_check and student_checks_used(user["sub"]) >= SELF_CHECK_LIMIT:
         raise HTTPException(status_code=429, detail="Daily self-check limit reached")
 
     try:
@@ -78,9 +78,19 @@ async def analyze(
                 result = analyze_directory(target.parent, language)
             source_type = "upload"
             source_value = upload.filename or "upload"
-        submission_id, cluster_members = save_analysis(user.get("sub") or user.get("user_id"), source_type, source_value, is_self_check, result, subject_id)
+        submission_id, saved_band, overlap, cluster_members = save_analysis(user["sub"], source_type, source_value, is_self_check, result, subject_id)
     except HTTPException:
         raise
     except (OSError, RuntimeError, ValueError) as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
-    return {"submission_id": submission_id, "risk_band": result["risk_band"], "files_included": result["files_included"], "boilerplate_lines_excluded": result["boilerplate_lines_excluded"], "commit_signal_count": len(result["commit_signals"]), "provenance_flag_count": len(result["provenance_flags"]), "similarity_cluster_members": cluster_members}
+    return {
+        "submission_id": submission_id,
+        "risk_band": saved_band,
+        "files_included": result["files_included"],
+        "boilerplate_lines_excluded": result["boilerplate_lines_excluded"],
+        "similarity_score": overlap,
+        "commit_metrics": result["commit_metrics"],
+        "commit_signals": result["commit_signals"],
+        "provenance_flags": result["provenance_flags"],
+        "similarity_cluster_members": cluster_members,
+    }
