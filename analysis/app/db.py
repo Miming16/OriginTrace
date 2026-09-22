@@ -21,9 +21,35 @@ def student_checks_used(user_id: str) -> int:
         return int(row[0])
 
 
-def save_analysis(user_id: str, source_type: str, source_url: str, is_self_check: bool, result: dict) -> tuple[str, list[str]]:
+def validate_student_subject(user_id: str, subject_id: str) -> None:
     with connection() as conn:
-        submission = conn.execute("INSERT INTO submissions (student_id, source_type, source_url, language, is_self_check, status) VALUES (%s, %s, %s, %s, %s, 'complete') RETURNING id", (user_id, source_type, source_url, result["language"], is_self_check)).fetchone()[0]
+        subject = conn.execute(
+            """SELECT s.is_published, s.is_open
+               FROM subjects s
+               WHERE s.id = %s""",
+            (subject_id,),
+        ).fetchone()
+
+    if not subject or not subject[0]:
+        raise LookupError("Subject not found")
+
+    with connection() as conn:
+        enrolled = conn.execute(
+            """SELECT 1 FROM enrollments
+               WHERE subject_id = %s AND student_id = %s""",
+            (subject_id, user_id),
+        ).fetchone()
+
+    if not enrolled:
+        raise PermissionError("You are not enrolled in this subject")
+
+    if not subject[1]:
+        raise RuntimeError("This subject is closed for submissions")
+
+
+def save_analysis(user_id: str, source_type: str, source_url: str, is_self_check: bool, result: dict, subject_id: str | None = None) -> tuple[str, list[str]]:
+    with connection() as conn:
+        submission = conn.execute("INSERT INTO submissions (student_id, subject_id, source_type, source_url, language, is_self_check, status) VALUES (%s, %s, %s, %s, %s, %s, 'complete') RETURNING id", (user_id, subject_id, source_type, source_url, result["language"], is_self_check)).fetchone()[0]
         for fingerprint in result["fingerprints"]:
             conn.execute("INSERT INTO fingerprints (submission_id, file_path, hash_value, window_position) VALUES (%s, %s, %s, %s)", (submission, fingerprint["file_path"], fingerprint["hash_value"], fingerprint["window_position"]))
         for flag in result["commit_signals"]:

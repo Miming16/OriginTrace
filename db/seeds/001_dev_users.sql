@@ -30,4 +30,6 @@ INSERT INTO users (id, id_number, email, password_hash, role, full_name) VALUES
      '$2a$10$gl/y59bfO1tWUk.p1u1rEuetf6wqMRI8904/wGQx1nZymSyqWoAkG',
      'admin',
      'Jorge Admin')
-ON CONFLICT DO NOTHING;
+ON CONFLICT (id) DO UPDATE
+SET email = EXCLUDED.email,
+    full_name = EXCLUDED.full_name;

@@ -5,13 +5,21 @@ import tempfile
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 
 from .auth import current_user, require_submission_role
 from .config import MAX_UPLOAD_BYTES, SELF_CHECK_LIMIT
-from .db import save_analysis, student_checks_used
+from .db import save_analysis, student_checks_used, validate_student_subject
 from .pipeline import analyze_directory, analyze_git_url, validate_language
 
 app = FastAPI(title="OriginTrace Analysis Service", version="0.1.0")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.get("/api/health")
@@ -24,6 +32,7 @@ async def analyze(
     source_url: str | None = Form(default=None),
     language: str = Form(...),
     is_self_check: bool = Form(default=False),
+    subject_id: str | None = Form(default=None),
     upload: UploadFile | None = File(default=None),
     user: dict = Depends(current_user),
 ) -> dict:
@@ -36,6 +45,17 @@ async def analyze(
         raise HTTPException(status_code=400, detail=str(error)) from error
     if is_self_check and user["role"] != "student":
         raise HTTPException(status_code=400, detail="Only students may create self-checks")
+    if is_self_check and not subject_id:
+        raise HTTPException(status_code=400, detail="subject_id is required for self-checks")
+    if is_self_check:
+        try:
+            validate_student_subject(user["sub"], subject_id)
+        except PermissionError as error:
+            raise HTTPException(status_code=403, detail=str(error)) from error
+        except LookupError as error:
+            raise HTTPException(status_code=404, detail=str(error)) from error
+        except RuntimeError as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
     if is_self_check and student_checks_used(user["sub"] if "sub" in user else user["user_id"]) >= SELF_CHECK_LIMIT:
         raise HTTPException(status_code=429, detail="Daily self-check limit reached")
 
@@ -58,7 +78,7 @@ async def analyze(
                 result = analyze_directory(target.parent, language)
             source_type = "upload"
             source_value = upload.filename or "upload"
-        submission_id, cluster_members = save_analysis(user.get("sub") or user.get("user_id"), source_type, source_value, is_self_check, result)
+        submission_id, cluster_members = save_analysis(user.get("sub") or user.get("user_id"), source_type, source_value, is_self_check, result, subject_id)
     except HTTPException:
         raise
     except (OSError, RuntimeError, ValueError) as error:

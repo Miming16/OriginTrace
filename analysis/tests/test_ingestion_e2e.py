@@ -85,6 +85,26 @@ def student():
 
 
 @pytest.fixture
+def self_check_subject(student):
+    with psycopg.connect(DATABASE_URL) as conn:
+        subject_id = str(
+            conn.execute(
+                """INSERT INTO subjects (instructor_id, subject_code, subject_title, is_published, is_open)
+                   VALUES (%s, 'E2E-SC', 'E2E Self Check', true, true)
+                   RETURNING id""",
+                (student,),
+            ).fetchone()[0]
+        )
+        conn.execute(
+            "INSERT INTO enrollments (student_id, subject_id) VALUES (%s, %s)",
+            (student, subject_id),
+        )
+    yield subject_id
+    with psycopg.connect(DATABASE_URL) as conn:
+        conn.execute("DELETE FROM subjects WHERE id = %s", (subject_id,))
+
+
+@pytest.fixture
 def instructor():
     user_id = make_user("instructor")
     yield user_id
@@ -287,12 +307,12 @@ def test_an_instructor_sees_the_ingested_row_with_its_risk_band(client, student,
     assert rows[0][4] is not None, "the dashboard would show an empty risk band"
 
 
-def test_the_self_check_quota_is_enforced_on_the_fourth_attempt(client, student):
+def test_the_self_check_quota_is_enforced_on_the_fourth_attempt(client, student, self_check_subject):
     headers = auth(student, "student")
     for attempt in range(1, SELF_CHECK_LIMIT + 1):
         response = client.post(
             "/api/analyze",
-            data={"language": "python", "is_self_check": "true"},
+            data={"language": "python", "is_self_check": "true", "subject_id": self_check_subject},
             files=upload("a.py", SMALL_SOURCE),
             headers=headers,
         )
@@ -300,12 +320,50 @@ def test_the_self_check_quota_is_enforced_on_the_fourth_attempt(client, student)
 
     blocked = client.post(
         "/api/analyze",
-        data={"language": "python", "is_self_check": "true"},
+        data={"language": "python", "is_self_check": "true", "subject_id": self_check_subject},
         files=upload("a.py", SMALL_SOURCE),
         headers=headers,
     )
     assert blocked.status_code == 429
     assert blocked.json()["detail"] == "Daily self-check limit reached"
+
+
+def test_closed_subject_rejects_self_check(client, student, self_check_subject):
+    with psycopg.connect(DATABASE_URL) as conn:
+        conn.execute("UPDATE subjects SET is_open = false WHERE id = %s", (self_check_subject,))
+
+    response = client.post(
+        "/api/analyze",
+        data={"language": "python", "is_self_check": "true", "subject_id": self_check_subject},
+        files=upload("a.py", SMALL_SOURCE),
+        headers=auth(student, "student"),
+    )
+    assert response.status_code == 409
+    assert response.json()["detail"] == "This subject is closed for submissions"
+
+
+def test_unenrolled_student_rejects_self_check(client, student, instructor):
+    with psycopg.connect(DATABASE_URL) as conn:
+        subject_id = str(
+            conn.execute(
+                """INSERT INTO subjects (instructor_id, subject_code, subject_title, is_published, is_open)
+                   VALUES (%s, 'E2E-UE', 'E2E Unenrolled', true, true)
+                   RETURNING id""",
+                (instructor,),
+            ).fetchone()[0]
+        )
+    try:
+        response = client.post(
+            "/api/analyze",
+            data={"language": "python", "is_self_check": "true", "subject_id": subject_id},
+            files=upload("a.py", SMALL_SOURCE),
+            headers=auth(student, "student"),
+        )
+        assert response.status_code == 403
+        assert response.json()["detail"] == "You are not enrolled in this subject"
+    finally:
+        with psycopg.connect(DATABASE_URL) as conn:
+            conn.execute("DELETE FROM subjects WHERE id = %s", (subject_id,))
 
 
 # --- 2.1.1.1 / 2.1.1.3 file selection (in-process, no database needed) --------

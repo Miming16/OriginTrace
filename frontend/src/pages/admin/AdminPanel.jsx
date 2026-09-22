@@ -110,10 +110,11 @@ export default function AdminPanel() {
     <div className="min-h-screen bg-background text-primary">
       <div className="flex items-center justify-between px-6 py-4 border-b border-border-standard bg-white">
         <span className="font-bold text-lg flex items-center gap-2">
-          <span className="material-symbols-outlined text-secondary">shield</span> OriginTrace
+          <img src="/origintrace-logo-home.png" alt="OriginTrace logo" className="brand-logo mini-logo" />
+          <span>OriginTrace</span>
         </span>
         <span className="text-sm text-slate-text-secondary">
-          Admin: {user?.fullName || '[name]'}
+          Admin: {user?.fullName || '[Jorge]'}
           <button onClick={logout} className="ml-2 text-secondary font-bold">Sign out</button>
         </span>
       </div>

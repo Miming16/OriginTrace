@@ -35,9 +35,9 @@ All three share the password `Passw0rd!`.
 
 | Role | Email | Name | Fixed id |
 |---|---|---|---|
-| student | `student@origintrace.test` | Sam Student | `1111…1111` |
-| instructor | `instructor@origintrace.test` | Ingrid Instructor | `2222…2222` |
-| admin | `admin@origintrace.test` | Ada Admin | `3333…3333` |
+| student | `chad.student@origintrace.test` | Chad Student | `1111…1111` |
+| instructor | `angeline.instructor@origintrace.test` | Angeline Instructor | `2222…2222` |
+| admin | `jorge.admin@origintrace.test` | Jorge Admin | `3333…3333` |
 
 The ids are fixed rather than `gen_random_uuid()` so that tests and the smoke
 script can reference a user without first querying for it.

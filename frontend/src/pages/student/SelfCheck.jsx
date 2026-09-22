@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import api, { analysisApi } from '../../api/axios';
 
 const STUDENT_HISTORY = [
   { id: 'cs302-p2', title: 'CS302 · Project 2', date: 'Today 10:30', device: 'PC-001', band: 'low', integrity: 94, structural: 9, byline: 'Python' },
@@ -25,21 +26,57 @@ export default function StudentSelfCheck() {
   const [activeView, setActiveView] = useState('dashboard');
   const [repoUrl, setRepoUrl] = useState('');
   const [result, setResult] = useState(null);
+  const [subjects, setSubjects] = useState([]);
+  const [selectedSubjectId, setSelectedSubjectId] = useState('');
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [loadingSubjects, setLoadingSubjects] = useState(true);
   const [gitHubConnected, setGitHubConnected] = useState(false);
-  const [selectedCourse, setSelectedCourse] = useState('CS101');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
-  const remainingChecks = useMemo(() => 3 - (result && result.checksUsed ? result.checksUsed : 1), [result]);
+  const selectedSubject = subjects.find((subject) => subject.id === selectedSubjectId);
+  const remainingChecks = useMemo(() => 3 - (result?.checksUsed || 0), [result]);
 
-  function runSelfCheck(e) {
+  useEffect(() => {
+    async function loadSubjects() {
+      try {
+        const response = await api.get('/student/subjects');
+        const availableSubjects = response.data.subjects || [];
+        setSubjects(availableSubjects);
+        setSelectedSubjectId(availableSubjects[0]?.id || '');
+      } catch (error) {
+        setResult({ error: error.response?.data?.error || 'Failed to load your subjects.' });
+      } finally {
+        setLoadingSubjects(false);
+      }
+    }
+
+    loadSubjects();
+  }, []);
+
+  async function runSelfCheck(e) {
     e.preventDefault();
-    if (remainingChecks <= 0) return;
-    setResult({ checking: true, band: null, checksUsed: 1 });
+    if (remainingChecks <= 0 || !selectedSubjectId || (!repoUrl && !selectedFile)) return;
 
-    setTimeout(() => {
-      const band = ['low', 'medium', 'high'][Math.floor(Math.random() * 3)];
-      setResult({ checking: false, band, checksUsed: 1 });
-    }, 1500);
+    const formData = new FormData();
+    formData.append('language', 'python');
+    formData.append('is_self_check', 'true');
+    formData.append('subject_id', selectedSubjectId);
+    if (selectedFile) {
+      formData.append('upload', selectedFile);
+    } else {
+      formData.append('source_url', repoUrl);
+    }
+
+    setResult({ checking: true, band: null, checksUsed: 1 });
+    try {
+      const response = await analysisApi.post('/analyze', formData);
+      setResult({ ...response.data, checking: false, checksUsed: 1 });
+    } catch (error) {
+      setResult({
+        checking: false,
+        error: error.response?.data?.detail || 'Submission failed.',
+      });
+    }
   }
 
   const studentStats = [
@@ -109,13 +146,13 @@ export default function StudentSelfCheck() {
         </div>
 
         <div className="course-selector-row">
-          {['CS101', 'CS205', 'CS302'].map((course) => (
+          {subjects.map((subject) => (
             <button
-              key={course}
-              className={selectedCourse === course ? 'course-chip active' : 'course-chip'}
-              onClick={() => setSelectedCourse(course)}
+              key={subject.id}
+              className={selectedSubjectId === subject.id ? 'course-chip active' : 'course-chip'}
+              onClick={() => setSelectedSubjectId(subject.id)}
             >
-              {course}
+              {subject.subject_code}
             </button>
           ))}
         </div>
@@ -209,7 +246,7 @@ export default function StudentSelfCheck() {
     <div className={isSidebarCollapsed ? 'app-layout sidebar-collapsed' : 'app-layout'}>
       <aside className="sidebar">
         <button type="button" className="brand-toggle" onClick={() => setIsSidebarCollapsed((value) => !value)} aria-label="Toggle sidebar">
-          <img src="/origintrace-logo.svg" alt="OriginTrace logo" className="brand-logo mini-logo" />
+          <img src="/origintrace-logo-home.png" alt="OriginTrace logo" className="brand-logo mini-logo" />
           <span className="brand-text">OriginTrace</span>
         </button>
 
@@ -254,15 +291,29 @@ export default function StudentSelfCheck() {
             </div>
 
             <form onSubmit={runSelfCheck} className="self-check-form">
+              <label>Subject</label>
+              <select
+                value={selectedSubjectId}
+                onChange={(e) => setSelectedSubjectId(e.target.value)}
+                disabled={loadingSubjects || result?.checking || subjects.length === 0}
+                required
+              >
+                <option value="">Select a subject</option>
+                {subjects.map((subject) => (
+                  <option key={subject.id} value={subject.id}>
+                    {subject.subject_code} - {subject.subject_title}{subject.is_open ? '' : ' (Closed)'}
+                  </option>
+                ))}
+              </select>
               <label>Git repository</label>
-              <input value={repoUrl} onChange={(e) => setRepoUrl(e.target.value)} placeholder="https://github.com/your-org/project" />
+              <input value={repoUrl} onChange={(e) => setRepoUrl(e.target.value)} placeholder="https://github.com/your-org/project" disabled={Boolean(selectedFile)} />
               <div className="or-divider">or</div>
               <label className="upload-box">
-                <input type="file" />
+                <input type="file" onChange={(e) => setSelectedFile(e.target.files[0] || null)} disabled={Boolean(repoUrl)} />
                 <span>Drop file / browse to upload</span>
               </label>
-              <button type="submit" className="primary-button" disabled={result?.checking}>
-                {result?.checking ? 'Analyzing…' : 'Run self-check'}
+              <button type="submit" className="primary-button" disabled={result?.checking || loadingSubjects || !selectedSubject?.is_open}>
+                {result?.checking ? 'Analyzing…' : selectedSubject && !selectedSubject.is_open ? 'Subject closed' : 'Run self-check'}
               </button>
             </form>
 
@@ -271,6 +322,8 @@ export default function StudentSelfCheck() {
                 <p>No submission yet.</p>
               ) : result.checking ? (
                 <p>Processing your repository...</p>
+              ) : result.error ? (
+                <p>{result.error}</p>
               ) : (
                 <>
                   <span className={`risk-badge ${RISK_META[result.band].cls}`}>{RISK_META[result.band].badge}</span>
