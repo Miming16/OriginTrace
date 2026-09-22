@@ -244,6 +244,17 @@ app.get('/api/admin/students', requireAuth, allowRoles('admin'), async (_req, re
   }
 });
 
+app.get('/api/admin/instructors', requireAuth, allowRoles('admin'), async (_req, res, next) => {
+  try {
+    const result = await requirePool().query(
+      "SELECT id, full_name, email FROM users WHERE role = 'instructor' ORDER BY full_name",
+    );
+    return res.json({ instructors: result.rows });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 app.get('/api/admin/subjects', requireAuth, allowRoles('admin'), async (_req, res, next) => {
   try {
     const result = await requirePool().query(
@@ -253,6 +264,28 @@ app.get('/api/admin/subjects', requireAuth, allowRoles('admin'), async (_req, re
        ORDER BY s.subject_code`,
     );
     return res.json({ subjects: result.rows });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+app.post('/api/admin/subjects', requireAuth, allowRoles('admin'), async (req, res, next) => {
+  const { subject_code: code, subject_title: title, instructor_id: instructorId } = req.body || {};
+  if (!code || !title || !instructorId) {
+    return res.status(400).json({ error: 'subject_code, subject_title, and instructor_id are required' });
+  }
+
+  try {
+    const result = await requirePool().query(
+      `INSERT INTO subjects (instructor_id, subject_code, subject_title)
+       SELECT id, $2, $3
+       FROM users
+       WHERE id = $1 AND role = 'instructor'
+       RETURNING id, subject_code, subject_title, instructor_id, is_published, is_open, self_check_limit`,
+      [instructorId, code, title],
+    );
+    if (!result.rows[0]) return res.status(400).json({ error: 'Instructor not found' });
+    return res.status(201).json({ subject: result.rows[0] });
   } catch (error) {
     return next(error);
   }
@@ -274,6 +307,23 @@ app.post('/api/admin/subjects/:id/enrollments', requireAuth, allowRoles('admin')
       return res.status(409).json({ error: 'Student is already enrolled in this subject' });
     }
     return res.status(201).json({ enrollment: result.rows[0] });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+app.get('/api/admin/enrollments', requireAuth, allowRoles('admin'), async (_req, res, next) => {
+  try {
+    const result = await requirePool().query(
+      `SELECT e.id, e.enrolled_at,
+              u.id AS student_id, u.full_name AS student_name, u.email AS student_email,
+              s.id AS subject_id, s.subject_code, s.subject_title
+       FROM enrollments e
+       JOIN users u ON u.id = e.student_id
+       JOIN subjects s ON s.id = e.subject_id
+       ORDER BY e.enrolled_at DESC`,
+    );
+    return res.json({ enrollments: result.rows });
   } catch (error) {
     return next(error);
   }

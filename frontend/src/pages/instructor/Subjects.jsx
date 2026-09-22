@@ -6,10 +6,6 @@ export default function Subjects() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const [code, setCode] = useState('');
-  const [title, setTitle] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-
   useEffect(() => {
     fetchSubjects();
   }, []);
@@ -34,40 +30,10 @@ export default function Subjects() {
     }
   }
 
-  async function handleCreate(e) {
-    e.preventDefault();
-    if (!code || !title) return;
-
-    setSubmitting(true);
-    try {
-      const res = await api.post('/instructor/subjects', { 
-        subject_code: code,
-        subject_title: title,
-      });
-      const subject = res.data.subject;
-
-      setSubjects((prev) => [
-        ...prev, {
-          ...subject,
-          code: subject.subject_code,
-          title: subject.subject_title,
-          isPublished: subject.is_published,
-          isOpen: subject.is_open,
-        }
-      ]);
-      setCode('');
-      setTitle('');
-    } catch (err) {
-      setError(err.response?.data?.message || 'Failed to create subject.');
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
   async function handleToggle(subjectId, field, currentValue) {
-  try {
-    const backendField =
-      field === 'isPublished' ? 'is_published' : 'is_open';
+    try {
+      const backendField =
+        field === 'isPublished' ? 'is_published' : 'is_open';
 
     const res = await api.patch(`/instructor/subjects/${subjectId}`, {
       [backendField]: !currentValue,
@@ -92,7 +58,7 @@ export default function Subjects() {
     setError(
       err.response?.data?.error || 'Failed to update toggle state.'
     );
-  }
+    }
 }
 
   return (
@@ -107,37 +73,6 @@ export default function Subjects() {
           {error}
         </div>
       )}
-
-      <form onSubmit={handleCreate} className="bg-white border border-border-standard rounded-xl p-5 mb-6 shadow-sm">
-        <h3 className="font-bold text-sm mb-3">Create new subject</h3>
-        <div className="flex flex-wrap gap-2">
-          <input
-            type="text"
-            placeholder="Subject code (e.g. CS101)"
-            value={code}
-            onChange={(e) => setCode(e.target.value)}
-            required
-            disabled={submitting}
-            className="border border-border-standard rounded-lg px-3 py-2 text-sm flex-1 min-w-[160px]"
-          />
-          <input
-            type="text"
-            placeholder="Subject title"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            required
-            disabled={submitting}
-            className="border border-border-standard rounded-lg px-3 py-2 text-sm flex-1 min-w-[200px]"
-          />
-          <button
-            type="submit"
-            disabled={submitting}
-            className="bg-secondary text-white px-4 py-2 rounded-lg text-sm font-bold hover:opacity-90 transition disabled:opacity-50"
-          >
-            {submitting ? 'Creating…' : 'Add subject'}
-          </button>
-        </div>
-      </form>
 
       {loading ? (
         <p className="text-sm text-slate-text-muted">Loading subjects…</p>
