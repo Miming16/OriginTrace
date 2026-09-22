@@ -17,8 +17,16 @@ export default function Subjects() {
   async function fetchSubjects() {
     try {
       setLoading(true);
-      const res = await api.get('/subjects');
-      setSubjects(res.data);
+      const res = await api.get('/instructor/subjects');
+      setSubjects(
+        res.data.subjects.map((subject) => ({
+          ...subject,
+          code: subject.subject_code,
+          title: subject.subject_title,
+          isPublished: subject.is_published,
+          isOpen: subject.is_open,
+        }))
+      );
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to load subjects.');
     } finally {
@@ -32,8 +40,21 @@ export default function Subjects() {
 
     setSubmitting(true);
     try {
-      const res = await api.post('/subjects', { code, title });
-      setSubjects((prev) => [...prev, res.data]);
+      const res = await api.post('/instructor/subjects', { 
+        subject_code: code,
+        subject_title: title,
+      });
+      const subject = res.data.subject;
+
+      setSubjects((prev) => [
+        ...prev, {
+          ...subject,
+          code: subject.subject_code,
+          title: subject.subject_title,
+          isPublished: subject.is_published,
+          isOpen: subject.is_open,
+        }
+      ]);
       setCode('');
       setTitle('');
     } catch (err) {
@@ -44,17 +65,35 @@ export default function Subjects() {
   }
 
   async function handleToggle(subjectId, field, currentValue) {
-    try {
-      const res = await api.patch(`/subjects/${subjectId}`, {
-        [field]: !currentValue,
-      });
-      setSubjects((prev) =>
-        prev.map((item) => (item.id === subjectId ? res.data : item))
-      );
-    } catch (err) {
-      setError(err.response?.data?.message || 'Failed to update toggle state.');
-    }
+  try {
+    const backendField =
+      field === 'isPublished' ? 'is_published' : 'is_open';
+
+    const res = await api.patch(`/instructor/subjects/${subjectId}`, {
+      [backendField]: !currentValue,
+    });
+
+    const subject = res.data.subject;
+
+    setSubjects((prev) =>
+      prev.map((item) =>
+        item.id === subjectId
+          ? {
+              ...subject,
+              code: subject.subject_code,
+              title: subject.subject_title,
+              isPublished: subject.is_published,
+              isOpen: subject.is_open,
+            }
+          : item
+      )
+    );
+  } catch (err) {
+    setError(
+      err.response?.data?.error || 'Failed to update toggle state.'
+    );
   }
+}
 
   return (
     <div>
