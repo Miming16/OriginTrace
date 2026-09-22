@@ -17,9 +17,9 @@ import { pool } from '../src/db.js';
 const skip = process.env.DATABASE_URL ? false : 'DATABASE_URL is not set';
 
 const SEED = {
-  student: { email: 'student@origintrace.test', id: '11111111-1111-4111-8111-111111111111' },
-  instructor: { email: 'instructor@origintrace.test', id: '22222222-2222-4222-8222-222222222222' },
-  admin: { email: 'admin@origintrace.test', id: '33333333-3333-4333-8333-333333333333' },
+  student: { id_number: '2023018093', id: '11111111-1111-4111-8111-111111111111' },
+  instructor: { id_number: '2023018092', id: '22222222-2222-4222-8222-222222222222' },
+  admin: { id_number: '2023018091', id: '33333333-3333-4333-8333-333333333333' },
 };
 const PASSWORD = 'Passw0rd!';
 
@@ -27,8 +27,8 @@ after(async () => {
   if (pool) await pool.end();
 });
 
-const login = (email, password) =>
-  request(app).post('/api/auth/login').send({ email, password });
+const login = (id_number, password) =>
+  request(app).post('/api/auth/login').send({ id_number, password });
 
 async function tokenFor(role) {
   const response = await login(SEED[role].email, PASSWORD);

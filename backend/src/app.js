@@ -15,22 +15,22 @@ app.get('/api/health', (_req, res) => {
 });
 
 app.post('/api/auth/login', async (req, res, next) => {
-  const { email, password } = req.body || {};
-  if (!email || !password) {
-    return res.status(400).json({ error: 'Email and password are required' });
+  const { idNumber, password } = req.body || {};
+  if (!idNumber || !password) {
+    return res.status(400).json({ error: 'ID number and password are required' });
   }
 
   try {
     const result = await requirePool().query(
-      'SELECT id, email, password_hash, role, full_name FROM users WHERE email = $1',
-      [email.toLowerCase().trim()],
+      'SELECT id, id_number, email, password_hash, role, full_name FROM users WHERE id_number = $1',
+      [String(idNumber).trim()],
     );
     const user = result.rows[0];
     if (!user || !(await bcrypt.compare(password, user.password_hash))) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    const { password_hash: _passwordHash, ...publicUser } = user;
+    const { password_hash: _hash, ...publicUser } = user;
     return res.json({ token: signUserToken(user), user: publicUser });
   } catch (error) {
     return next(error);
@@ -40,7 +40,7 @@ app.post('/api/auth/login', async (req, res, next) => {
 app.get('/api/me', requireAuth, async (req, res, next) => {
   try {
     const result = await requirePool().query(
-      'SELECT id, email, role, full_name FROM users WHERE id = $1',
+      'SELECT id, id_number, role, full_name FROM users WHERE id = $1',
       [req.user.sub],
     );
     if (!result.rows[0]) return res.status(404).json({ error: 'User not found' });
@@ -50,16 +50,22 @@ app.get('/api/me', requireAuth, async (req, res, next) => {
   }
 });
 
-app.get('/api/instructor/submissions', requireAuth, allowRoles('instructor'), async (_req, res, next) => {
+app.get('/api/instructor/submissions', requireAuth, allowRoles('instructor'), async (req, res, next) => {
   try {
-    const result = await requirePool().query(`
-      SELECT s.id, u.full_name AS student, s.language, s.status, s.submitted_at,
-             r.risk_band
-      FROM submissions s
-      JOIN users u ON u.id = s.student_id
-      LEFT JOIN risk_scores r ON r.submission_id = s.id
-      ORDER BY s.submitted_at DESC
-    `);
+    const result = await requirePool().query(
+      `SELECT sub.id, u.full_name AS student, subj.subject_code,
+              sub.language, sub.status, sub.submitted_at,
+              r.risk_band, r.similarity_score,
+              d.decision
+       FROM submissions sub
+       JOIN users u    ON u.id = sub.student_id
+       JOIN subjects subj ON subj.id = sub.subject_id
+       LEFT JOIN risk_scores r ON r.submission_id = sub.id
+       LEFT JOIN originality_decisions d ON d.submission_id = sub.id
+       WHERE subj.instructor_id = $1 AND sub.is_self_check = false
+       ORDER BY sub.submitted_at DESC`,
+      [req.user.sub],
+    );
     return res.json({ submissions: result.rows });
   } catch (error) {
     return next(error);
@@ -83,6 +89,69 @@ app.get('/api/student/self-checks/quota', requireAuth, allowRoles('student'), as
     const limit = Number(limitRow.rows[0]?.limit ?? 3);
     const used = usedRow.rows[0].used;
     return res.json({ limit, used, remaining: Math.max(0, limit - used), window: 'daily' });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+app.get('/api/instructor/submissions/:id', requireAuth, allowRoles('instructor'), async (req, res, next) => {
+  const pool = requirePool();
+  try {
+    const owned = await pool.query(
+      `SELECT sub.id FROM submissions sub
+       JOIN subjects s ON s.id = sub.subject_id
+       WHERE sub.id = $1 AND s.instructor_id = $2`,
+      [req.params.id, req.user.sub],
+    );
+    if (!owned.rows[0]) return res.status(404).json({ error: 'Submission not found' });
+
+    const [risk, peers, commits, flags, decision] = await Promise.all([
+      pool.query('SELECT risk_band, similarity_score FROM risk_scores WHERE submission_id = $1', [req.params.id]),
+      pool.query(
+        `SELECT u.full_name AS peer_student, m.submission_id AS peer_submission_id
+         FROM similarity_cluster_members me
+         JOIN similarity_cluster_members m ON m.cluster_id = me.cluster_id
+                                          AND m.submission_id <> me.submission_id
+         JOIN submissions p ON p.id = m.submission_id
+         JOIN users u       ON u.id = p.student_id
+         WHERE me.submission_id = $1`,
+        [req.params.id],
+      ),
+      pool.query('SELECT signal_type, severity, description FROM commit_signals WHERE submission_id = $1', [req.params.id]),
+      pool.query('SELECT flag_type, severity, description FROM provenance_flags WHERE submission_id = $1', [req.params.id]),
+      pool.query('SELECT decision, note, decided_at FROM originality_decisions WHERE submission_id = $1', [req.params.id]),
+    ]);
+
+    return res.json({
+      risk: risk.rows[0] || null,
+      peers: peers.rows,
+      commit_signals: commits.rows,
+      provenance_flags: flags.rows,
+      decision: decision.rows[0] || null,
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+app.post('/api/instructor/submissions/:id/decision', requireAuth, allowRoles('instructor'), async (req, res, next) => {
+  const { decision, note } = req.body || {};
+  const allowed = ['cleared', 'under_review', 'flagged'];
+  if (!allowed.includes(decision)) {
+    return res.status(400).json({ error: `decision must be one of ${allowed.join(', ')}` });
+  }
+
+  try {
+    const result = await requirePool().query(
+      `INSERT INTO originality_decisions (submission_id, instructor_id, decision, note)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (submission_id)
+       DO UPDATE SET decision = EXCLUDED.decision, note = EXCLUDED.note,
+                     instructor_id = EXCLUDED.instructor_id, decided_at = now()
+       RETURNING decision, note, decided_at`,
+      [req.params.id, req.user.sub, decision, note || null],
+    );
+    return res.json({ decision: result.rows[0] });
   } catch (error) {
     return next(error);
   }

@@ -56,7 +56,7 @@ const EXPECTED_FOREIGN_KEYS = [
 // [table, distinctive fragment of the CHECK expression]
 const EXPECTED_CHECKS = [
   ['users', "role"],
-  ['users', 'users_email_not_blank'],
+  ['users', 'users_id_number_not_blank'],
   ['users', 'users_full_name_not_blank'],
   ['submissions', 'source_type'],
   ['submissions', 'language'],
@@ -170,7 +170,7 @@ test('unique constraints declared in the migration exist', { skip }, async () =>
   const has = (table, definition) =>
     rows.some((r) => r.table_name === table && r.definition === definition);
 
-  assert.ok(has('users', 'UNIQUE (email)'), 'users.email must be UNIQUE');
+  assert.ok(has('users', 'UNIQUE (id_number)'), 'users.id_number must be UNIQUE');
   assert.ok(has('risk_scores', 'UNIQUE (submission_id)'), 'one risk score per submission');
   assert.ok(
     has('originality_decisions', 'UNIQUE (submission_id)'),
@@ -195,7 +195,7 @@ test('users.role rejects a value outside the CHECK constraint', { skip }, async 
   await assert.rejects(
     () =>
       pool.query(
-        `INSERT INTO users (email, password_hash, role, full_name)
+        `INSERT INTO users (id_number, password_hash, role, full_name)
          VALUES ('bad-role@origintrace.test', 'x', 'superuser', 'Bad Role')`,
       ),
     (error) => {
@@ -211,8 +211,8 @@ test('deleting a user cascades to submissions, fingerprints and risk scores', { 
   try {
     await client.query('BEGIN');
     const { rows: [user] } = await client.query(
-      `INSERT INTO users (email, password_hash, role, full_name)
-       VALUES ('cascade@origintrace.test', 'x', 'student', 'Cascade Probe') RETURNING id`,
+      `INSERT INTO users (id_number, password_hash, role, full_name)
+       VALUES ('2023018090', 'x', 'student', 'Cascade Probe') RETURNING id`,
     );
     const { rows: [submission] } = await client.query(
       `INSERT INTO submissions (student_id, source_type, source_url, language)
@@ -256,8 +256,8 @@ test('DEFECT D-01: submissions.language accepts javascript and rejects java', { 
   try {
     await client.query('BEGIN');
     const { rows: [user] } = await client.query(
-      `INSERT INTO users (email, password_hash, role, full_name)
-       VALUES ('lang@origintrace.test', 'x', 'student', 'Language Probe') RETURNING id`,
+      `INSERT INTO users (id_number, password_hash, role, full_name)
+       VALUES ('2023018089', 'x', 'student', 'Language Probe') RETURNING id`,
     );
     const insert = (language) =>
       client.query(
@@ -293,8 +293,8 @@ test('DEFECT D-02: fingerprints.hash_value is signed BIGINT and rejects 2^63 and
   try {
     await client.query('BEGIN');
     const { rows: [user] } = await client.query(
-      `INSERT INTO users (email, password_hash, role, full_name)
-       VALUES ('overflow@origintrace.test', 'x', 'student', 'Overflow Probe') RETURNING id`,
+      `INSERT INTO users (id_number, password_hash, role, full_name)
+       VALUES ('2023018088', 'x', 'student', 'Overflow Probe') RETURNING id`,
     );
     const { rows: [submission] } = await client.query(
       `INSERT INTO submissions (student_id, source_type, source_url, language)
