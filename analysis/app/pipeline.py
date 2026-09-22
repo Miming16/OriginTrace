@@ -4,6 +4,7 @@ import hashlib
 import re
 import subprocess
 import tempfile
+from datetime import datetime
 from pathlib import Path
 
 from tree_sitter import Language, Parser
@@ -82,21 +83,60 @@ def winnow(values: list[str], k: int = 5, window: int = 4) -> list[dict]:
     return [{"hash_value": value, "window_position": position} for position, value in selected.items()]
 
 
-def git_signals(root: Path) -> list[dict]:
+def git_signals(root: Path, final_lines: int) -> tuple[list[dict], dict]:
     try:
-        log = subprocess.run(["git", "-C", str(root), "log", "--format=%H%x09%an%x09%ae%x09%cn%x09%ce%x09%s", "-n", "50"], capture_output=True, text=True, timeout=10, check=False)
+        log = subprocess.run(
+            ["git", "-C", str(root), "log", "--numstat", "--format=%H%x09%aI%x09%an%x09%ae%x09%cn%x09%ce%x09%s", "-n", "50"],
+            capture_output=True, text=True, timeout=10, check=False,
+        )
     except (OSError, subprocess.TimeoutExpired):
-        return [{"signal_type": "low_message_entropy", "severity": "medium", "description": "Git history could not be read."}]
-    lines = [line for line in log.stdout.splitlines() if line]
+        return ([{"signal_type": "low_message_entropy", "severity": "medium", "description": "Git history could not be read."}], {
+            "commit_count": 0, "timespan_days": 0, "has_big_bang": False,
+            "low_entropy_count": 0, "author_committer_match_pct": 100.0,
+        })
+    commits = []
+    current = None
+    for line in log.stdout.splitlines():
+        fields = line.split("\t", 6)
+        if len(fields) == 7 and len(fields[0]) == 40 and "T" in fields[1]:
+            current = {
+                "date": fields[1], "author": fields[2], "author_email": fields[3],
+                "committer": fields[4], "committer_email": fields[5],
+                "message": fields[6], "changed_lines": 0,
+            }
+            commits.append(current)
+        elif current and line.count("\t") == 2:
+            additions, deletions, _path = line.split("\t")
+            if additions.isdigit():
+                current["changed_lines"] += int(additions)
+            if deletions.isdigit():
+                current["changed_lines"] += int(deletions)
+
+    commit_count = len(commits)
+    dates = [datetime.fromisoformat(commit["date"]) for commit in commits]
+    timespan_days = (max(dates) - min(dates)).total_seconds() / 86400 if dates else 0
+    low_entropy_count = sum(len(commit["message"].split()) <= 2 for commit in commits)
+    matching_commits = sum(
+        commit["author"] == commit["committer"] and commit["author_email"] == commit["committer_email"]
+        for commit in commits
+    )
+    author_committer_match_pct = round(100 * matching_commits / commit_count, 2) if commit_count else 100.0
+    has_big_bang = bool(final_lines and any(commit["changed_lines"] > final_lines * 0.8 for commit in commits))
+    metrics = {
+        "commit_count": commit_count,
+        "timespan_days": round(timespan_days, 2),
+        "has_big_bang": has_big_bang,
+        "low_entropy_count": low_entropy_count,
+        "author_committer_match_pct": author_committer_match_pct,
+    }
     signals = []
-    if len(lines) <= 1:
+    if commit_count <= 1 or has_big_bang:
         signals.append({"signal_type": "big_bang_commit", "severity": "medium", "description": "Repository has little or no development history."})
-    messages = [line.split("\t", 5)[-1] for line in lines]
-    if messages and sum(len(message.split()) <= 2 for message in messages) / len(messages) > 0.5:
+    if commit_count and low_entropy_count / commit_count > 0.5:
         signals.append({"signal_type": "low_message_entropy", "severity": "low", "description": "A high proportion of commit messages are unusually short."})
-    if any(fields[1] != fields[3] or fields[2] != fields[4] for line in lines if len((fields := line.split("\t"))) >= 6):
+    if author_committer_match_pct < 100:
         signals.append({"signal_type": "author_committer_mismatch", "severity": "medium", "description": "At least one commit author differs from its committer."})
-    return signals
+    return signals, metrics
 
 
 def analyze_directory(root: Path, language: str) -> dict:
@@ -109,12 +149,12 @@ def analyze_directory(root: Path, language: str) -> dict:
         filtered = remove_boilerplate(source)
         excluded += len(source.splitlines()) - len(filtered.splitlines())
         fingerprints.extend({"file_path": path.relative_to(root).as_posix(), **fingerprint} for fingerprint in winnow(normalized_ast(filtered, language)))
-    commit_flags = git_signals(root)
+    commit_flags, commit_metrics = git_signals(root, sum(len(path.read_text(encoding="utf-8", errors="ignore").splitlines()) for path in files))
     provenance_flags = [{"flag_type": flag["signal_type"], "severity": flag["severity"], "description": flag["description"]} for flag in commit_flags if flag["signal_type"] == "author_committer_mismatch"]
     similarity_score = min(1.0, len(fingerprints) / 1000)
     score = similarity_score + 0.15 * len(commit_flags) + 0.15 * len(provenance_flags)
     risk_band = "high" if score >= 0.75 else "medium" if score >= 0.35 else "low"
-    return {"language": language, "files_included": len(files), "boilerplate_lines_excluded": excluded, "fingerprints": fingerprints, "commit_signals": commit_flags, "provenance_flags": provenance_flags, "similarity_score": round(similarity_score, 4), "risk_band": risk_band}
+    return {"language": language, "files_included": len(files), "boilerplate_lines_excluded": excluded, "fingerprints": fingerprints, "commit_signals": commit_flags, "commit_metrics": commit_metrics, "provenance_flags": provenance_flags, "similarity_score": round(similarity_score, 4), "risk_band": risk_band}
 
 
 def analyze_git_url(url: str, language: str) -> dict:

@@ -43,12 +43,50 @@ def test_the_result_record_has_the_documented_shape(tmp_path):
         "boilerplate_lines_excluded",
         "fingerprints",
         "commit_signals",
+        "commit_metrics",
         "provenance_flags",
         "similarity_score",
         "risk_band",
     }
     for fingerprint in result["fingerprints"]:
         assert set(fingerprint) == {"file_path", "hash_value", "window_position"}
+
+
+def test_commit_history_metrics_distinguish_single_and_multi_commit_repositories(tmp_path):
+    def commit(repository, message, date):
+        environment = {
+            "GIT_AUTHOR_DATE": date,
+            "GIT_COMMITTER_DATE": date,
+        }
+        subprocess.run(["git", "add", "-A"], cwd=repository, check=True, capture_output=True)
+        subprocess.run(
+            ["git", "commit", "-q", "-m", message],
+            cwd=repository, env={**__import__("os").environ, **environment}, check=True, capture_output=True,
+        )
+
+    single = write(tmp_path, "single", "\n".join(f"def function_{index}():\n    return {index}" for index in range(10)))
+    multi = write(tmp_path, "multi", "\n".join(f"def function_{index}():\n    return {index}" for index in range(5)))
+    for repository in (single, multi):
+        subprocess.run(["git", "init", "-q", "-b", "main"], cwd=repository, check=True, capture_output=True)
+        subprocess.run(["git", "config", "user.email", "student@origintrace.test"], cwd=repository, check=True, capture_output=True)
+        subprocess.run(["git", "config", "user.name", "Student"], cwd=repository, check=True, capture_output=True)
+    commit(single, "Add complete solution", "2026-01-01T00:00:00+00:00")
+    commit(multi, "Start solution history", "2026-01-01T00:00:00+00:00")
+    (multi / "module.py").write_text("\n".join(f"def function_{index}():\n    return {index}" for index in range(10)), encoding="utf-8")
+    commit(multi, "Add remaining functions", "2026-01-03T00:00:00+00:00")
+
+    single_metrics = analyze_directory(single, "python")["commit_metrics"]
+    multi_metrics = analyze_directory(multi, "python")["commit_metrics"]
+
+    assert single_metrics["commit_count"] == 1
+    assert single_metrics["has_big_bang"] is True
+    assert multi_metrics == {
+        "commit_count": 2,
+        "timespan_days": 2.0,
+        "has_big_bang": False,
+        "low_entropy_count": 0,
+        "author_committer_match_pct": 100.0,
+    }
 
 
 def test_the_risk_band_matches_the_score_it_is_derived_from(tmp_path):

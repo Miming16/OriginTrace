@@ -117,7 +117,9 @@ app.get('/api/instructor/submissions/:id', requireAuth, allowRoles('instructor')
          WHERE me.submission_id = $1`,
         [req.params.id],
       ),
-      pool.query('SELECT signal_type, severity, description FROM commit_signals WHERE submission_id = $1', [req.params.id]),
+      pool.query(`SELECT signal_type, severity, description, commit_count, timespan_days,
+             has_big_bang, low_entropy_count, author_committer_match_pct
+          FROM commit_signals WHERE submission_id = $1`, [req.params.id]),
       pool.query('SELECT flag_type, severity, description FROM provenance_flags WHERE submission_id = $1', [req.params.id]),
       pool.query('SELECT decision, note, decided_at FROM originality_decisions WHERE submission_id = $1', [req.params.id]),
     ]);

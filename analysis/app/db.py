@@ -52,9 +52,20 @@ def save_analysis(user_id: str, source_type: str, source_url: str, is_self_check
         submission = conn.execute("INSERT INTO submissions (student_id, subject_id, source_type, source_url, language, is_self_check, status) VALUES (%s, %s, %s, %s, %s, %s, 'complete') RETURNING id", (user_id, subject_id, source_type, source_url, result["language"], is_self_check)).fetchone()[0]
         for fingerprint in result["fingerprints"]:
             conn.execute("INSERT INTO fingerprints (submission_id, file_path, hash_value, window_position) VALUES (%s, %s, %s, %s)", (submission, fingerprint["file_path"], fingerprint["hash_value"], fingerprint["window_position"]))
+        metrics = result.get("commit_metrics", {})
         for flag in result["commit_signals"]:
             if flag["signal_type"] != "author_committer_mismatch":
-                conn.execute("INSERT INTO commit_signals (submission_id, signal_type, severity, description) VALUES (%s, %s, %s, %s)", (submission, flag["signal_type"], flag["severity"], flag["description"]))
+                conn.execute(
+                    """INSERT INTO commit_signals
+                       (submission_id, signal_type, severity, description,
+                        commit_count, timespan_days, has_big_bang,
+                        low_entropy_count, author_committer_match_pct)
+                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                    (submission, flag["signal_type"], flag["severity"], flag["description"],
+                     metrics.get("commit_count", 0), metrics.get("timespan_days", 0),
+                     metrics.get("has_big_bang", False), metrics.get("low_entropy_count", 0),
+                     metrics.get("author_committer_match_pct", 100)),
+                )
         for flag in result["provenance_flags"]:
             conn.execute("INSERT INTO provenance_flags (submission_id, flag_type, severity, description) VALUES (%s, %s, %s, %s)", (submission, flag["flag_type"], flag["severity"], flag["description"]))
         conn.execute("INSERT INTO risk_scores (submission_id, risk_band, similarity_score, commit_flag_count, provenance_flag_count) VALUES (%s, %s, %s, %s, %s)", (submission, result["risk_band"], result["similarity_score"], len(result["commit_signals"]), len(result["provenance_flags"])))
