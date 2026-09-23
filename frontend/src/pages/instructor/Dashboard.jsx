@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../api/axios';
 
@@ -57,16 +57,9 @@ export default function InstructorDashboard() {
   const [selectedCourse, setSelectedCourse] = useState(null);
   const [selectedAssignment, setSelectedAssignment] = useState(null);
   const [showCollaboratorRequestsPage, setShowCollaboratorRequestsPage] = useState(false);
-  const [showNewAssignmentPage, setShowNewAssignmentPage] = useState(false);
-  const [courseAssignments, setCourseAssignments] = useState(DEFAULT_COURSE_CONTENT.assignments);
   const [collaboratorRequests, setCollaboratorRequests] = useState(DEFAULT_COLLABORATOR_REQUESTS);
   const [assignmentFilter, setAssignmentFilter] = useState('all');
-  const [submissionAttempts, setSubmissionAttempts] = useState('Unlimited');
-  const [submissionCourseFilter, setSubmissionCourseFilter] = useState('all');
-  const [submissionAssignmentFilter, setSubmissionAssignmentFilter] = useState('all');
   const [courseCollaborators, setCourseCollaborators] = useState({});
-  const descriptionEditorRef = useRef(null);
-  const descriptionSelectionRef = useRef(null);
 
   const [loading, setLoading] = useState(true);
   const [loadingDetail, setLoadingDetail] = useState(false);
@@ -97,19 +90,7 @@ export default function InstructorDashboard() {
       setLoading(true);
       const res = await api.get('/instructor/submissions');
       const data = res.data?.submissions || [];
-      setSubmissions(data.map((submission) => {
-        const riskBand = submission.risk || submission.risk_band || 'low';
-        const assignment = submission.assignment || submission.assignment_name || submission.assignment_title || '';
-
-        return {
-          ...submission,
-          course: submission.course || submission.subject_code || 'Unknown course',
-          assignment,
-          submittedDate: submission.submittedDate || submission.submitted_at,
-          lang: submission.lang || submission.language,
-          risk: riskBand.charAt(0).toUpperCase() + riskBand.slice(1).toLowerCase(),
-        };
-      }));
+      setSubmissions(data);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to fetch submissions.');
     } finally {
@@ -156,20 +137,7 @@ export default function InstructorDashboard() {
     }
   }
 
-  const submissionCourseOptions = [...new Set(submissions.map((submission) => submission.course).filter(Boolean))].sort();
-  const submissionAssignmentOptions = [...new Set(
-    submissions.map((submission) => submission.assignment || 'Unassigned'),
-  )].sort();
-  const visibleSubmissions = submissions
-    .filter((submission) => (
-      submissionCourseFilter === 'all' || submission.course === submissionCourseFilter
-    ))
-    .filter((submission) => (
-      submissionAssignmentFilter === 'all'
-      || (submission.assignment || 'Unassigned') === submissionAssignmentFilter
-    ))
-    .sort((first, second) => new Date(second.submittedDate || 0) - new Date(first.submittedDate || 0));
-  const selected = visibleSubmissions.find((s) => s.id === selectedId);
+  const selected = submissions.find((s) => s.id === selectedId);
 
   const lowCount = submissions.filter((s) => s.risk === 'Low').length;
   const mediumCount = submissions.filter((s) => s.risk === 'Medium').length;
@@ -189,7 +157,7 @@ export default function InstructorDashboard() {
     ? selectedCourseRequests
     : selectedCourseRequests.filter((request) => request.assignment === assignmentFilter);
   const assignmentOptions = [...new Set(selectedCourseRequests.map((request) => request.assignment))];
-  const orderedAssignments = [...courseAssignments].sort(
+  const orderedAssignments = [...DEFAULT_COURSE_CONTENT.assignments].sort(
     (first, second) => new Date(first.createdAt) - new Date(second.createdAt),
   );
   const orderedSubmissionActivity = selectedAssignment
@@ -203,72 +171,6 @@ export default function InstructorDashboard() {
       ...current,
       [selectedCourse.id]: (current[selectedCourse.id] || []).filter((request) => request.id !== requestId),
     }));
-  }
-
-  function handleCreateAssignment(event) {
-    event.preventDefault();
-    const formData = new FormData(event.currentTarget);
-    const title = String(formData.get('title') || '').trim();
-    const deadline = String(formData.get('deadline') || '').trim();
-    const description = String(formData.get('description') || '').trim();
-    const attempts = submissionAttempts === 'Custom'
-      ? String(formData.get('attemptsCustom') || '').trim()
-      : submissionAttempts;
-
-    setCourseAssignments((current) => [
-      ...current,
-      {
-        id: `assignment-${Date.now()}`,
-        title,
-        description,
-        attempts,
-        due: deadline ? `Due ${deadline}` : 'No deadline',
-        status: '0 submissions',
-        createdAt: new Date().toISOString(),
-        submissions: [],
-      },
-    ]);
-    setShowNewAssignmentPage(false);
-  }
-
-  function saveDescriptionSelection() {
-    const selection = window.getSelection();
-    if (!selection?.rangeCount || !descriptionEditorRef.current?.contains(selection.anchorNode)) return;
-
-    descriptionSelectionRef.current = selection.getRangeAt(0).cloneRange();
-  }
-
-  function restoreDescriptionSelection() {
-    const savedRange = descriptionSelectionRef.current;
-    if (!savedRange) return;
-
-    const selection = window.getSelection();
-    selection.removeAllRanges();
-    selection.addRange(savedRange);
-  }
-
-  function runDescriptionCommand(command, value = null) {
-    descriptionEditorRef.current?.focus();
-    restoreDescriptionSelection();
-    document.execCommand(command, false, value);
-  }
-
-  function renderDescriptionTool(label, icon, command, value = null) {
-    return (
-      <button
-        type="button"
-        className="description-tool"
-        aria-label={label}
-        title={label}
-        onMouseDown={(event) => {
-          saveDescriptionSelection();
-          event.preventDefault();
-        }}
-        onClick={() => runDescriptionCommand(command, value)}
-      >
-        <span className="material-symbols-outlined">{icon}</span>
-      </button>
-    );
   }
 
   return (
@@ -374,42 +276,16 @@ export default function InstructorDashboard() {
               <div className="panel">
                 <div className="panel-header">
                   <h3>Recent submissions</h3>
-                  <span className="muted">{visibleSubmissions.length} shown</span>
-                </div>
-
-                <div className="request-filter-bar submission-filter-bar">
-                  <label htmlFor="submission-course-filter">Course</label>
-                  <select
-                    id="submission-course-filter"
-                    value={submissionCourseFilter}
-                    onChange={(event) => setSubmissionCourseFilter(event.target.value)}
-                  >
-                    <option value="all">All courses</option>
-                    {submissionCourseOptions.map((course) => (
-                      <option key={course} value={course}>{course}</option>
-                    ))}
-                  </select>
-
-                  <label htmlFor="submission-assignment-filter">Assignment</label>
-                  <select
-                    id="submission-assignment-filter"
-                    value={submissionAssignmentFilter}
-                    onChange={(event) => setSubmissionAssignmentFilter(event.target.value)}
-                  >
-                    <option value="all">All assignments</option>
-                    {submissionAssignmentOptions.map((assignment) => (
-                      <option key={assignment} value={assignment}>{assignment}</option>
-                    ))}
-                  </select>
+                  <span className="muted">{submissions.length} shown</span>
                 </div>
 
                 {loading ? (
                   <p className="loading-state">Loading submissions...</p>
-                ) : visibleSubmissions.length === 0 ? (
+                ) : submissions.length === 0 ? (
                   <p className="empty-state">No submissions found.</p>
                 ) : (
                   <div className="submission-table">
-                    {visibleSubmissions.map((s) => (
+                    {submissions.map((s) => (
                       <div
                         key={s.id}
                         className={selectedId === s.id ? 'submission-row active' : 'submission-row'}
@@ -418,7 +294,7 @@ export default function InstructorDashboard() {
                         <div>
                           <strong>{s.student || s.name || s.studentName}</strong>
                           <p>
-                            {s.course} · {s.assignment || 'Unassigned'} · Status: <em>{s.status || 'Submitted'}</em> · {s.submittedDate ? new Date(s.submittedDate).toLocaleString() : 'N/A'}
+                            {s.subject || s.course} · Status: <em>{s.status || 'Submitted'}</em> · {s.submittedDate || s.time || 'N/A'}
                           </p>
                         </div>
                         <div className="submission-row-meta">
@@ -432,9 +308,10 @@ export default function InstructorDashboard() {
                     ))}
                   </div>
                 )}
+              </div>
 
-                {selected && (
-                  <div className="detail-panel">
+              {selected ? (
+                <div className="panel detail-panel">
                   <div className="panel-header">
                     <h3>{selected.student || selected.name || selected.studentName}</h3>
                     <span className={`risk-badge ${RISK_META[selected.risk]?.cls || 'risk-low'}`}>
@@ -527,39 +404,32 @@ export default function InstructorDashboard() {
                       </div>
                     </>
                   )}
-                  </div>
-                )}
-              </div>
+                </div>
+              ) : (
+                <div className="panel detail-panel empty-detail">
+                  <p className="empty-state">Select a submission from the table above to view detail analysis.</p>
+                </div>
+              )}
             </>
           )}
 
           {activeNav === 'courses' && (
             <div className="panel">
-              {!showCollaboratorRequestsPage && !showNewAssignmentPage ? (
+              {!showCollaboratorRequestsPage ? (
                 <div className="panel-header course-workspace-header">
                   <div className="course-page-title">
                     <span className="muted">Course workspace</span>
                     <h3>{selectedCourse?.subject_code || 'Course roster'}</h3>
                     {selectedCourse && <p>{selectedCourse.subject_title}</p>}
                   </div>
-                  <div className="course-workspace-actions">
-                    <button
-                      type="button"
-                      className="ghost-button small"
-                      disabled={!selectedCourse}
-                      onClick={() => setShowNewAssignmentPage(true)}
-                    >
-                      New Assignment
-                    </button>
-                    <button
-                      type="button"
-                      className="primary-button small add-collaborator-button"
-                      disabled={!selectedCourse}
-                      onClick={() => setShowCollaboratorRequestsPage(true)}
-                    >
-                      Collaborator Request
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    className="primary-button small add-collaborator-button"
+                    disabled={!selectedCourse}
+                    onClick={() => setShowCollaboratorRequestsPage(true)}
+                  >
+                    Collaborator Request
+                  </button>
                 </div>
               ) : null}
               {courses.length === 0 ? (
@@ -624,154 +494,26 @@ export default function InstructorDashboard() {
                     )}
                   </div>
                 </div>
-              ) : showNewAssignmentPage ? (
-                <div className="new-assignment-page">
-                  <div className="new-assignment-header">
-                    <div>
-                      <button
-                        type="button"
-                        className="back-link"
-                        onClick={() => setShowNewAssignmentPage(false)}
-                      >
-                        <span className="material-symbols-outlined">arrow_back</span>
-                        Back to course
-                      </button>
-                      <h3>New Assignment</h3>
-                      <p>Students see the title, instructions, and deadline.</p>
-                    </div>
-                  </div>
-                  <form className="new-assignment-form" onSubmit={handleCreateAssignment}>
-                    <div className="assignment-form-grid points-row">
-                      <label>
-                        Points
-                        <input name="points" type="number" min="0" defaultValue="100" />
-                      </label>
-                    </div>
-                    <label>
-                      Title
-                      <input name="title" required placeholder="e.g. Lab 7 - Classes & Objects" autoFocus />
-                    </label>
-                    <label className="description-field">
-                      Description / Instructions
-                      <div className="description-editor">
-                        <div className="description-toolbar" role="toolbar" aria-label="Description formatting">
-                          {renderDescriptionTool('Undo', 'undo', 'undo')}
-                          {renderDescriptionTool('Redo', 'redo', 'redo')}
-                          <span className="description-toolbar-divider" />
-                          <select className="description-style-select" aria-label="Text style" defaultValue="p" onMouseDown={saveDescriptionSelection} onChange={(event) => runDescriptionCommand('formatBlock', event.target.value)}>
-                            <option value="p">Normal text</option>
-                            <option value="h2">Heading</option>
-                            <option value="h3">Subheading</option>
-                          </select>
-                          <select className="description-font-select" aria-label="Font" defaultValue="Arial" onMouseDown={saveDescriptionSelection} onChange={(event) => runDescriptionCommand('fontName', event.target.value)}>
-                            <option>Arial</option>
-                            <option>Georgia</option>
-                            <option>Verdana</option>
-                          </select>
-                          <select className="description-size-select" aria-label="Font size" defaultValue="3" onMouseDown={saveDescriptionSelection} onChange={(event) => runDescriptionCommand('fontSize', event.target.value)}>
-                            <option value="2">10</option>
-                            <option value="3">11</option>
-                            <option value="4">14</option>
-                            <option value="5">18</option>
-                          </select>
-                          {renderDescriptionTool('Bold', 'format_bold', 'bold')}
-                          {renderDescriptionTool('Italic', 'format_italic', 'italic')}
-                          {renderDescriptionTool('Underline', 'format_underlined', 'underline')}
-                          {renderDescriptionTool('Insert link', 'link', 'createLink', 'https://')}
-                          {renderDescriptionTool('Bulleted list', 'format_list_bulleted', 'insertUnorderedList')}
-                          {renderDescriptionTool('Numbered list', 'format_list_numbered', 'insertOrderedList')}
-                          {renderDescriptionTool('Align left', 'format_align_left', 'justifyLeft')}
-                          {renderDescriptionTool('Align center', 'format_align_center', 'justifyCenter')}
-                          {renderDescriptionTool('Align right', 'format_align_right', 'justifyRight')}
-                          {renderDescriptionTool('Justify text', 'format_align_justify', 'justifyFull')}
-                          {renderDescriptionTool('Clear formatting', 'format_clear', 'removeFormat')}
-                        </div>
-                        <div
-                          ref={descriptionEditorRef}
-                          className="description-editor-content"
-                          contentEditable
-                          role="textbox"
-                          aria-multiline="true"
-                          data-placeholder="What students need to build, constraints, grading notes..."
-                          onMouseUp={saveDescriptionSelection}
-                          onKeyUp={saveDescriptionSelection}
-                          onBlur={saveDescriptionSelection}
-                          onInput={(event) => {
-                            event.currentTarget.nextElementSibling.value = event.currentTarget.innerHTML;
-                          }}
-                          suppressContentEditableWarning
-                        />
-                        <input type="hidden" name="description" />
-                      </div>
-                    </label>
-                    <div className="assignment-form-grid deadline-row">
-                      <label>
-                        Deadline date
-                        <input
-                          name="deadline"
-                          type="text"
-                          placeholder="mm/dd/yy"
-                          inputMode="numeric"
-                          pattern="(?:0[1-9]|1[0-2])/(?:0[1-9]|[12][0-9]|3[01])/\\d{2}"
-                          title="Use the format mm/dd/yy"
-                        />
-                      </label>
-                      <label>
-                        Deadline time
-                        <input name="deadlineTime" type="time" defaultValue="23:59" />
-                      </label>
-                      <label className="attempts-field">
-                        Submission attempts
-                        <select
-                          name="attempts"
-                          value={submissionAttempts}
-                          onChange={(event) => setSubmissionAttempts(event.target.value)}
-                        >
-                          <option>Unlimited</option>
-                          <option>1</option>
-                          <option>3</option>
-                          <option>5</option>
-                          <option>Custom</option>
-                        </select>
-                        {submissionAttempts === 'Custom' && (
-                          <input
-                            name="attemptsCustom"
-                            type="number"
-                            min="1"
-                            step="1"
-                            required
-                            placeholder="Enter number"
-                            aria-label="Custom submission attempts"
-                          />
-                        )}
-                      </label>
-                      <label>
-                        Self-check limit
-                        <select name="selfCheckLimit" defaultValue="Unlimited">
-                          <option>Unlimited</option>
-                          <option>1</option>
-                          <option>3</option>
-                          <option>5</option>
-                        </select>
-                      </label>
-                    </div>
-                    <p className="assignment-form-help">Submission attempts control how many times a student can resubmit before the deadline. Every self-check run is logged.</p>
-                    <fieldset className="language-options">
-                      <legend>Allowed languages</legend>
-                      <label><input type="checkbox" name="languages" value="Python" defaultChecked /> Python</label>
-                      <label><input type="checkbox" name="languages" value="Java" defaultChecked /> Java</label>
-                      <label><input type="checkbox" name="languages" value="C" defaultChecked /> C</label>
-                      <label><input type="checkbox" name="languages" value="PHP" defaultChecked /> PHP</label>
-                    </fieldset>
-                    <label className="late-submission-option"><input type="checkbox" name="acceptLate" /> Accept late submissions</label>
-                    <div className="new-assignment-actions">
-                      <button type="submit" className="primary-button">Create Assignment</button>
-                      <button type="button" className="text-button" onClick={() => setShowNewAssignmentPage(false)}>Cancel</button>
-                    </div>
-                  </form>
-                </div>
               ) : (
                 <div className="course-overview">
+                  <div className="course-overview-summary">
+                    <div className="course-overview-info">
+                      <span className="muted">Subject information</span>
+                      <h3>{selectedCourse?.subject_code}</h3>
+                      <p>{selectedCourse?.subject_title}</p>
+                      <div className="course-detail-list">
+                        <div><span>Instructor</span><strong>{user?.fullName || 'Assigned instructor'}</strong></div>
+                        <div><span>Enrollment</span><strong>{selectedCourse?.enrolled_count || 0} students</strong></div>
+                        <div><span>Availability</span><strong>{selectedCourse?.is_open ? 'Open' : 'Closed'}</strong></div>
+                      </div>
+                    </div>
+                    <div className="course-overview-note">
+                      <span className="material-symbols-outlined">school</span>
+                      <strong>Course workspace</strong>
+                      <p>Review course activity, assignments, and announcements from one place.</p>
+                    </div>
+                  </div>
+
                   <div className="course-overview-grid">
                     <section className="course-info-section">
                       {selectedAssignment ? (
@@ -868,75 +610,17 @@ export default function InstructorDashboard() {
           )}
 
           {activeNav === 'settings' && (
-            <div className="profile-settings-page">
-              <div className="profile-settings-top">
-                <section className="panel profile-card">
-                  <div className="profile-avatar">{(user?.fullName || 'Instructor').slice(0, 2).toUpperCase()}</div>
-                  <h3>{user?.fullName || 'Instructor'}</h3>
-                  <p>Computer Science Department</p>
-                  <span className="role-badge">Instructor</span>
-                  <div className="profile-details">
-                    <div><span>Employee no.</span><strong>{user?.id_number || user?.idNumber || 'FAC-0087'}</strong></div>
-                    <div><span>Email</span><strong>{user?.email || 'd.ramos@university.edu'}</strong></div>
-                    <div><span>Courses</span><strong>CS101 · CS205 · CS302</strong></div>
-                  </div>
-                </section>
-
-                <section className="panel connected-accounts-panel">
-                  <div className="panel-header settings-panel-heading">
-                    <div>
-                      <h3>Connected Accounts</h3>
-                      <p>Connect your GitHub account to accept student repository invites and review coursework repos.</p>
-                    </div>
-                  </div>
-                  <div className="connected-account-row">
-                    <div className="connected-account-name">
-                      <span className="github-mark">●</span>
-                      <div><strong>GitHub</strong><span>Not connected</span></div>
-                    </div>
-                    <button type="button" className="dark-button">Connect GitHub</button>
-                  </div>
-                </section>
-              </div>
-
-              <div className="profile-settings-bottom">
-                <section className="panel detection-panel">
-                  <div className="settings-section-title">Detection Parameters</div>
-                  <div className="settings-field">
-                    <label htmlFor="sensitivity">Sensitivity</label>
-                    <div className="fixed-setting"><strong>Always Maximum</strong><span>✓ Fixed</span></div>
-                    <p>Detection always runs at full sensitivity — every signal is collected and scored. Flags remain advisory.</p>
-                  </div>
-                  <div className="settings-field">
-                    <label htmlFor="risk-threshold">Risk Threshold</label>
-                    <select id="risk-threshold" defaultValue="50% · Standard">
-                      <option>50% · Standard</option>
-                      <option>70% · High confidence</option>
-                      <option>30% · Early warning</option>
-                    </select>
-                  </div>
-                  <div className="settings-field">
-                    <label htmlFor="comparison-limit">Comparison Limit</label>
-                    <select id="comparison-limit" defaultValue="250 submissions per batch">
-                      <option>250 submissions per batch</option>
-                      <option>500 submissions per batch</option>
-                      <option>1000 submissions per batch</option>
-                    </select>
-                    <p>Estimated load time: ~12s for 250 submissions</p>
-                  </div>
-                  <div className="device-tracking-field">
-                    <label htmlFor="device-tracking">Device Tracking</label>
-                    <label className="checkbox-label"><input id="device-tracking" type="checkbox" defaultChecked /> Track MAC addresses for provenance</label>
-                    <p>Helps identify if code is written on multiple devices</p>
-                  </div>
-                </section>
-
-                <section className="panel integrations-panel">
-                  <div className="settings-section-title">Integrations</div>
-                  <div className="integration-row"><div><strong>Keystroke Extension</strong><span>Provenance metadata tracking</span></div><b>✓ Active</b></div>
-                  <div className="integration-row"><div><strong>PostgreSQL</strong><span>Docker · Self-Hosted</span></div><b>✓ Online</b></div>
-                  <div className="sync-status"><strong>▣ Sync Status</strong><span>Last sync: 2 minutes ago · 142 submissions indexed</span><div className="sync-bar"><i /></div></div>
-                </section>
+            <div className="profile-layout">
+              <div className="panel">
+                <div className="panel-header">
+                  <h3>Account</h3>
+                </div>
+                <div className="settings-list">
+                  <div><span>Instructor</span><strong>{user?.fullName}</strong></div>
+                  <div><span>Department</span><strong>Computer Science</strong></div>
+                  <div><span>Region</span><strong>USJR</strong></div>
+                  <div><span>Security</span><strong>JWT + HTTPS</strong></div>
+                </div>
               </div>
             </div>
           )}
