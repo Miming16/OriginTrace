@@ -237,7 +237,7 @@ def test_an_upload_over_the_size_limit_is_rejected_with_413(client, student, mon
 
 # --- 2.1 the happy path -------------------------------------------------------
 
-def test_a_git_url_is_cloned_analysed_and_stored(client, student, git_repository):
+def test_student_git_analysis_returns_only_safe_summary(client, student, git_repository):
     response = client.post(
         "/api/analyze",
         data={"language": "python", "source_url": git_repository},
@@ -245,32 +245,10 @@ def test_a_git_url_is_cloned_analysed_and_stored(client, student, git_repository
     )
     assert response.status_code == 200, response.text
     body = response.json()
-    assert set(body) == {
-        "submission_id",
-        "risk_band",
-        "structural_score",
-        "matches",
-        "guidance",
-        "files_included",
-        "boilerplate_lines_excluded",
-        "similarity_score",
-        "commit_metrics",
-        "commit_signals",
-        "provenance_flags",
-        "similarity_cluster_members",
-    }
-    assert body["files_included"] == 1
+    assert set(body) == {"submission_id", "risk_band", "guidance"}
+    assert "matches" not in body
+    assert "commit_signals" not in body
     assert body["risk_band"] in {"LOW", "MEDIUM", "HIGH"}
-    assert set(body["commit_signals"]) == {
-        "commit_count",
-        "timespan_days",
-        "has_big_bang",
-        "low_entropy_count",
-        "author_committer_match_pct",
-    }
-    assert body["provenance_flags"][0]["flag_type"] == "enrolled_email_mismatch"
-    assert body["provenance_flags"][0]["flag_level"] == "SOFT"
-    assert body["similarity_cluster_members"] == []
 
     with psycopg.connect(DATABASE_URL) as conn:
         row = conn.execute(
@@ -284,15 +262,36 @@ def test_a_git_url_is_cloned_analysed_and_stored(client, student, git_repository
     assert fingerprints > 0
 
 
+def test_instructor_git_analysis_keeps_full_response(client, instructor, git_repository):
+    response = client.post(
+        "/api/analyze",
+        data={"language": "python", "source_url": git_repository},
+        headers=auth(instructor, "instructor"),
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert "matches" in body
+    assert "commit_signals" in body
+    assert "provenance_flags" in body
+
+
 def test_the_same_repository_twice_is_clustered(client, student, git_repository):
     headers = auth(student, "student")
     first = client.post("/api/analyze", data={"language": "python", "source_url": git_repository}, headers=headers)
     second = client.post("/api/analyze", data={"language": "python", "source_url": git_repository}, headers=headers)
     assert first.status_code == 200 and second.status_code == 200
 
-    assert first.json()["submission_id"] in second.json()["similarity_cluster_members"], (
-        "resubmitting the same repository did not cluster it with the first submission"
-    )
+    with psycopg.connect(DATABASE_URL) as conn:
+        clustered = conn.execute(
+            """SELECT 1
+               FROM similarity_cluster_members current_member
+               JOIN similarity_cluster_members previous_member
+                 ON previous_member.cluster_id = current_member.cluster_id
+               WHERE current_member.submission_id = %s
+                 AND previous_member.submission_id = %s""",
+            (second.json()["submission_id"], first.json()["submission_id"]),
+        ).fetchone()
+    assert clustered, "resubmitting the same repository did not create a persisted similarity cluster"
 
 
 def test_an_instructor_sees_the_ingested_row_with_its_risk_band(client, student, instructor, git_repository):
@@ -472,7 +471,7 @@ def test_defect_d08_a_zip_upload_is_stored_with_zero_files(client, student):
         headers=auth(student, "student"),
     )
     assert response.status_code == 200
-    assert response.json()["files_included"] == 0, "zip extraction appears to work now -- D-08 can be closed"
+    assert set(response.json()) == {"submission_id", "risk_band", "guidance"}
 
     with psycopg.connect(DATABASE_URL) as conn:
         stored = conn.execute(

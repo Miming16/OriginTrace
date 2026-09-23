@@ -106,7 +106,7 @@ async def analyze(
         raise HTTPException(status_code=400, detail=str(error)) from error
     public_flags = public_provenance_flags(result["provenance_flags"])
     legacy_cluster_members = [match["peer_submission_id"] for match in cluster_members]
-    return {
+    response = {
         "submission_id": submission_id,
         "risk_band": saved_band.upper(),
         "structural_score": round(overlap * 100, 2),
@@ -120,3 +120,10 @@ async def analyze(
         "commit_metrics": result["commit_metrics"],
         "similarity_cluster_members": legacy_cluster_members,
     }
+    if user["role"] == "student":
+        return {
+            "submission_id": response["submission_id"],
+            "risk_band": response["risk_band"],
+            "guidance": response["guidance"],
+        }
+    return response
