@@ -4,10 +4,15 @@ import api from '../../api/axios';
 
 const NAV_ITEMS = [
   { key: 'dashboard', label: 'Dashboard', icon: 'dashboard' },
-  { key: 'collaborators', label: 'Collaborators', icon: 'group_add' },
   { key: 'courses', label: 'Courses', icon: 'school' },
   { key: 'flags', label: 'Flags', icon: 'flag' },
   { key: 'settings', label: 'Profile & Settings', icon: 'settings' },
+];
+
+const DEFAULT_COURSES = [
+  { id: 'cs101', subject_code: 'CS101', subject_title: 'Introduction to Programming', enrolled_count: 0, is_open: true },
+  { id: 'cs205', subject_code: 'CS205', subject_title: 'Introduction to Programming', enrolled_count: 0, is_open: true },
+  { id: 'cs302', subject_code: 'CS302', subject_title: 'Introduction to Programming', enrolled_count: 0, is_open: true },
 ];
 
 const RISK_META = {
@@ -20,11 +25,17 @@ export default function InstructorDashboard() {
   const { user, logout } = useAuth();
   const [activeNav, setActiveNav] = useState('dashboard');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isCourseMenuOpen, setIsCourseMenuOpen] = useState(false);
 
   const [submissions, setSubmissions] = useState([]);
-  const [requests, setRequests] = useState([]);
+  const [courses, setCourses] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [detailData, setDetailData] = useState(null);
+  const [selectedCourse, setSelectedCourse] = useState(null);
+  const [showCollaboratorForm, setShowCollaboratorForm] = useState(false);
+  const [collaboratorName, setCollaboratorName] = useState('');
+  const [collaboratorEmail, setCollaboratorEmail] = useState('');
+  const [courseCollaborators, setCourseCollaborators] = useState({});
 
   const [loading, setLoading] = useState(true);
   const [loadingDetail, setLoadingDetail] = useState(false);
@@ -33,7 +44,22 @@ export default function InstructorDashboard() {
 
   useEffect(() => {
     fetchSubmissions();
+    fetchCourses();
   }, []);
+
+  async function fetchCourses() {
+    try {
+      const res = await api.get('/instructor/subjects');
+      const assignedCourses = res.data?.subjects || [];
+      const availableCourses = assignedCourses.length > 0 ? assignedCourses : DEFAULT_COURSES;
+      setCourses(availableCourses);
+      setSelectedCourse(availableCourses[0] || null);
+    } catch (err) {
+      setCourses(DEFAULT_COURSES);
+      setSelectedCourse(DEFAULT_COURSES[0]);
+      setError(err.response?.data?.message || 'Failed to load assigned courses.');
+    }
+  }
 
   async function fetchSubmissions() {
     try {
@@ -100,12 +126,20 @@ export default function InstructorDashboard() {
     { label: 'Low risk', value: lowCount, badge: 'check_circle' },
   ];
 
-  function acceptRequest(id) {
-    setRequests((current) => current.filter((item) => item.id !== id));
-  }
+  function handleAddCollaborator(event) {
+    event.preventDefault();
 
-  function declineRequest(id) {
-    setRequests((current) => current.filter((item) => item.id !== id));
+    const name = collaboratorName.trim();
+    const email = collaboratorEmail.trim();
+    if (!name || !email) return;
+
+    setCourseCollaborators((current) => ({
+      ...current,
+      [selectedCourse.id]: [...(current[selectedCourse.id] || []), { id: Date.now(), name, email }],
+    }));
+    setCollaboratorName('');
+    setCollaboratorEmail('');
+    setShowCollaboratorForm(false);
   }
 
   return (
@@ -121,7 +155,14 @@ export default function InstructorDashboard() {
             <button
               key={item.key}
               className={activeNav === item.key ? 'nav-item active' : 'nav-item'}
-              onClick={() => setActiveNav(item.key)}
+              onClick={() => {
+                setActiveNav(item.key);
+                if (item.key === 'courses') {
+                  setIsCourseMenuOpen((value) => !value);
+                } else {
+                  setIsCourseMenuOpen(false);
+                }
+              }}
             >
               <span className="material-symbols-outlined">{item.icon}</span>
               <span>{item.label}</span>
@@ -135,13 +176,40 @@ export default function InstructorDashboard() {
         </div>
       </aside>
 
+      {activeNav === 'courses' && isCourseMenuOpen && (
+        <aside className="course-menu-panel">
+          <div className="course-menu-header">
+            <span className="muted">Instructor workspace</span>
+            <h3>Assigned courses</h3>
+          </div>
+          {courses.length === 0 ? (
+            <p className="empty-state">No assigned courses.</p>
+          ) : (
+            <nav className="assigned-course-list" aria-label="Assigned courses">
+              {courses.map((course) => (
+                <button
+                  type="button"
+                  key={course.id}
+                  className={selectedCourse?.id === course.id ? 'assigned-course active' : 'assigned-course'}
+                  onClick={() => {
+                    setSelectedCourse(course);
+                    setIsCourseMenuOpen(false);
+                  }}
+                >
+                  <strong>{course.subject_code}</strong>
+                  <span>{course.subject_title}</span>
+                </button>
+              ))}
+            </nav>
+          )}
+        </aside>
+      )}
+
       <main className="main-shell">
         <header className="topbar">
           <h2>
             {activeNav === 'dashboard'
               ? 'Instructor Dashboard'
-              : activeNav === 'collaborators'
-              ? 'Collaborators'
               : activeNav === 'courses'
               ? 'Courses'
               : activeNav === 'flags'
@@ -311,48 +379,118 @@ export default function InstructorDashboard() {
             </>
           )}
 
-          {activeNav === 'collaborators' && (
-            <div className="panel">
-              <div className="panel-header">
-                <h3>Collaborator requests</h3>
-                <span className="muted">{requests.length} pending</span>
-              </div>
-
-              <div className="request-list">
-                {requests.length === 0 ? (
-                  <p className="empty-state">All collaborator requests have been resolved.</p>
-                ) : (
-                  requests.map((request) => (
-                    <div key={request.id} className="request-row">
-                      <div>
-                        <strong>{request.student}</strong>
-                        <p>{request.course} · {request.type}</p>
-                      </div>
-                      <div className="request-actions">
-                        <button className="primary-button small" onClick={() => acceptRequest(request.id)}>Accept</button>
-                        <button className="ghost-button small" onClick={() => declineRequest(request.id)}>Decline</button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          )}
-
           {activeNav === 'courses' && (
             <div className="panel">
               <div className="panel-header">
                 <h3>Course roster</h3>
-                <span className="muted">Active courses</span>
+                <button
+                  type="button"
+                  className="primary-button small add-collaborator-button"
+                  disabled={!selectedCourse}
+                  onClick={() => setShowCollaboratorForm((value) => !value)}
+                >
+                  Add Collaborator +
+                </button>
               </div>
-              <div className="course-grid">
-                {['CS101', 'CS205', 'CS302'].map((course) => (
-                  <div key={course} className="course-card">
-                    <h4>{course}</h4>
-                    <p>Introduction to Programming</p>
+              {courses.length === 0 ? (
+                <p className="empty-state">No courses are assigned to this instructor yet.</p>
+              ) : (
+                <div className="course-roster-layout">
+                  <div className="course-grid">
+                    {courses.map((course) => (
+                      <button
+                        type="button"
+                        key={course.id}
+                        className={selectedCourse?.id === course.id ? 'course-card selected' : 'course-card'}
+                        onClick={() => setSelectedCourse(course)}
+                      >
+                        <h4>{course.subject_code}</h4>
+                        <p>{course.subject_title}</p>
+                        <small>{course.enrolled_count || 0} enrolled</small>
+                      </button>
+                    ))}
                   </div>
-                ))}
-              </div>
+
+                  {selectedCourse && <aside className="course-side-panel">
+                    <div className="course-side-panel-header">
+                      <div>
+                        <span className="muted">Assigned course</span>
+                        <h3>{selectedCourse.subject_code}</h3>
+                      </div>
+                      <button
+                        type="button"
+                        className="close-panel-button"
+                        onClick={() => setSelectedCourse(null)}
+                        aria-label="Close course details"
+                      >
+                        <span className="material-symbols-outlined">close</span>
+                      </button>
+                    </div>
+
+                    <div className="course-detail-list">
+                      <div><span>Course title</span><strong>{selectedCourse.subject_title}</strong></div>
+                      <div><span>Instructor</span><strong>{user?.fullName || 'Assigned instructor'}</strong></div>
+                      <div><span>Enrollment</span><strong>{selectedCourse.enrolled_count || 0} students</strong></div>
+                      <div><span>Availability</span><strong>{selectedCourse.is_open ? 'Open' : 'Closed'}</strong></div>
+                    </div>
+
+                    <div className="course-collaborators">
+                <div className="course-collaborators-header">
+                  <div>
+                    <h3>Collaborators</h3>
+                    <p className="muted">People who can help review this course.</p>
+                  </div>
+                  <span className="muted">{(courseCollaborators[selectedCourse.id] || []).length} added</span>
+                </div>
+
+                {showCollaboratorForm && (
+                  <form className="collaborator-form" onSubmit={handleAddCollaborator}>
+                    <label>
+                      Name
+                      <input
+                        type="text"
+                        value={collaboratorName}
+                        onChange={(event) => setCollaboratorName(event.target.value)}
+                        placeholder="Collaborator name"
+                        required
+                      />
+                    </label>
+                    <label>
+                      Email
+                      <input
+                        type="email"
+                        value={collaboratorEmail}
+                        onChange={(event) => setCollaboratorEmail(event.target.value)}
+                        placeholder="name@school.edu"
+                        required
+                      />
+                    </label>
+                    <div className="collaborator-form-actions">
+                      <button type="submit" className="primary-button small">Add collaborator</button>
+                      <button type="button" className="ghost-button small" onClick={() => setShowCollaboratorForm(false)}>Cancel</button>
+                    </div>
+                  </form>
+                )}
+
+                {(courseCollaborators[selectedCourse.id] || []).length === 0 ? (
+                  <p className="empty-state">No collaborators added to this course yet.</p>
+                ) : (
+                  <div className="collaborator-list">
+                    {courseCollaborators[selectedCourse.id].map((collaborator) => (
+                      <div key={collaborator.id} className="collaborator-row">
+                        <div>
+                          <strong>{collaborator.name}</strong>
+                          <p>{collaborator.email}</p>
+                        </div>
+                        <span className="status-pill">Active</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                    </div>
+                  </aside>}
+                </div>
+              )}
             </div>
           )}
 
