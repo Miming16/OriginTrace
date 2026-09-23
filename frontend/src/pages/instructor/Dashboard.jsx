@@ -57,6 +57,8 @@ export default function InstructorDashboard() {
   const [selectedCourse, setSelectedCourse] = useState(null);
   const [selectedAssignment, setSelectedAssignment] = useState(null);
   const [showCollaboratorRequestsPage, setShowCollaboratorRequestsPage] = useState(false);
+  const [showNewAssignmentPage, setShowNewAssignmentPage] = useState(false);
+  const [courseAssignments, setCourseAssignments] = useState(DEFAULT_COURSE_CONTENT.assignments);
   const [collaboratorRequests, setCollaboratorRequests] = useState(DEFAULT_COLLABORATOR_REQUESTS);
   const [assignmentFilter, setAssignmentFilter] = useState('all');
   const [courseCollaborators, setCourseCollaborators] = useState({});
@@ -157,7 +159,7 @@ export default function InstructorDashboard() {
     ? selectedCourseRequests
     : selectedCourseRequests.filter((request) => request.assignment === assignmentFilter);
   const assignmentOptions = [...new Set(selectedCourseRequests.map((request) => request.assignment))];
-  const orderedAssignments = [...DEFAULT_COURSE_CONTENT.assignments].sort(
+  const orderedAssignments = [...courseAssignments].sort(
     (first, second) => new Date(first.createdAt) - new Date(second.createdAt),
   );
   const orderedSubmissionActivity = selectedAssignment
@@ -171,6 +173,26 @@ export default function InstructorDashboard() {
       ...current,
       [selectedCourse.id]: (current[selectedCourse.id] || []).filter((request) => request.id !== requestId),
     }));
+  }
+
+  function handleCreateAssignment(event) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    const title = String(formData.get('title') || '').trim();
+    const deadline = String(formData.get('deadline') || '').trim();
+
+    setCourseAssignments((current) => [
+      ...current,
+      {
+        id: `assignment-${Date.now()}`,
+        title,
+        due: deadline ? `Due ${deadline}` : 'No deadline',
+        status: '0 submissions',
+        createdAt: new Date().toISOString(),
+        submissions: [],
+      },
+    ]);
+    setShowNewAssignmentPage(false);
   }
 
   return (
@@ -415,21 +437,31 @@ export default function InstructorDashboard() {
 
           {activeNav === 'courses' && (
             <div className="panel">
-              {!showCollaboratorRequestsPage ? (
+              {!showCollaboratorRequestsPage && !showNewAssignmentPage ? (
                 <div className="panel-header course-workspace-header">
                   <div className="course-page-title">
                     <span className="muted">Course workspace</span>
                     <h3>{selectedCourse?.subject_code || 'Course roster'}</h3>
                     {selectedCourse && <p>{selectedCourse.subject_title}</p>}
                   </div>
-                  <button
-                    type="button"
-                    className="primary-button small add-collaborator-button"
-                    disabled={!selectedCourse}
-                    onClick={() => setShowCollaboratorRequestsPage(true)}
-                  >
-                    Collaborator Request
-                  </button>
+                  <div className="course-workspace-actions">
+                    <button
+                      type="button"
+                      className="ghost-button small"
+                      disabled={!selectedCourse}
+                      onClick={() => setShowNewAssignmentPage(true)}
+                    >
+                      New Assignment
+                    </button>
+                    <button
+                      type="button"
+                      className="primary-button small add-collaborator-button"
+                      disabled={!selectedCourse}
+                      onClick={() => setShowCollaboratorRequestsPage(true)}
+                    >
+                      Collaborator Request
+                    </button>
+                  </div>
                 </div>
               ) : null}
               {courses.length === 0 ? (
@@ -438,9 +470,13 @@ export default function InstructorDashboard() {
                 <div className="collaborator-request-page">
                   <div className="collaborator-request-page-header">
                     <div className="course-breadcrumb" aria-label="Course navigation">
-                      <span className="course-breadcrumb-course">
+                      <button
+                        type="button"
+                        className="course-breadcrumb-course"
+                        onClick={() => setShowCollaboratorRequestsPage(false)}
+                      >
                         {selectedCourse.subject_code} - {selectedCourse.subject_title}
-                      </span>
+                      </button>
                       <span className="material-symbols-outlined course-breadcrumb-chevron">chevron_right</span>
                       <strong>Collaborator Requests</strong>
                     </div>
@@ -490,26 +526,88 @@ export default function InstructorDashboard() {
                     )}
                   </div>
                 </div>
-              ) : (
-                <div className="course-overview">
-                  <div className="course-overview-summary">
-                    <div className="course-overview-info">
-                      <span className="muted">Subject information</span>
-                      <h3>{selectedCourse?.subject_code}</h3>
-                      <p>{selectedCourse?.subject_title}</p>
-                      <div className="course-detail-list">
-                        <div><span>Instructor</span><strong>{user?.fullName || 'Assigned instructor'}</strong></div>
-                        <div><span>Enrollment</span><strong>{selectedCourse?.enrolled_count || 0} students</strong></div>
-                        <div><span>Availability</span><strong>{selectedCourse?.is_open ? 'Open' : 'Closed'}</strong></div>
-                      </div>
-                    </div>
-                    <div className="course-overview-note">
-                      <span className="material-symbols-outlined">school</span>
-                      <strong>Course workspace</strong>
-                      <p>Review course activity, assignments, and announcements from one place.</p>
+              ) : showNewAssignmentPage ? (
+                <div className="new-assignment-page">
+                  <div className="new-assignment-header">
+                    <div>
+                      <button
+                        type="button"
+                        className="back-link"
+                        onClick={() => setShowNewAssignmentPage(false)}
+                      >
+                        <span className="material-symbols-outlined">arrow_back</span>
+                        Back to course
+                      </button>
+                      <h3>New Assignment</h3>
+                      <p>Students see the title, instructions, and deadline. Detection settings apply per assignment.</p>
                     </div>
                   </div>
-
+                  <form className="new-assignment-form" onSubmit={handleCreateAssignment}>
+                    <div className="assignment-form-grid course-points-row">
+                      <label>
+                        Course
+                        <select name="course" defaultValue={selectedCourse?.id || ''}>
+                          <option value={selectedCourse?.id || ''}>{selectedCourse?.subject_code} - {selectedCourse?.subject_title}</option>
+                        </select>
+                      </label>
+                      <label>
+                        Points
+                        <input name="points" type="number" min="0" defaultValue="100" />
+                      </label>
+                    </div>
+                    <label>
+                      Title
+                      <input name="title" required placeholder="e.g. Lab 7 - Classes & Objects" autoFocus />
+                    </label>
+                    <label>
+                      Description / Instructions
+                      <textarea name="description" rows="4" placeholder="What students need to build, constraints, grading notes..." />
+                    </label>
+                    <div className="assignment-form-grid deadline-row">
+                      <label>
+                        Deadline date
+                        <input name="deadline" type="date" />
+                      </label>
+                      <label>
+                        Deadline time
+                        <input name="deadlineTime" type="time" defaultValue="23:59" />
+                      </label>
+                      <label>
+                        Submission attempts
+                        <select name="attempts" defaultValue="Unlimited">
+                          <option>Unlimited</option>
+                          <option>1</option>
+                          <option>3</option>
+                          <option>5</option>
+                        </select>
+                      </label>
+                      <label>
+                        Self-check limit
+                        <select name="selfCheckLimit" defaultValue="Unlimited">
+                          <option>Unlimited</option>
+                          <option>1</option>
+                          <option>3</option>
+                          <option>5</option>
+                        </select>
+                      </label>
+                    </div>
+                    <p className="assignment-form-help">Submission attempts control how many times a student can resubmit before the deadline. Every self-check run is logged.</p>
+                    <fieldset className="language-options">
+                      <legend>Allowed languages</legend>
+                      <label><input type="checkbox" name="languages" value="Python" defaultChecked /> Python</label>
+                      <label><input type="checkbox" name="languages" value="Java" defaultChecked /> Java</label>
+                      <label><input type="checkbox" name="languages" value="C" defaultChecked /> C</label>
+                      <label><input type="checkbox" name="languages" value="PHP" defaultChecked /> PHP</label>
+                    </fieldset>
+                    <label className="late-submission-option"><input type="checkbox" name="acceptLate" /> Accept late submissions</label>
+                    <div className="new-assignment-actions">
+                      <button type="submit" className="primary-button">Create Assignment</button>
+                      <button type="button" className="text-button" onClick={() => setShowNewAssignmentPage(false)}>Cancel</button>
+                    </div>
+                  </form>
+                </div>
+              ) : (
+                <div className="course-overview">
                   <div className="course-overview-grid">
                     <section className="course-info-section">
                       {selectedAssignment ? (

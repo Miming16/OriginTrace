@@ -435,6 +435,130 @@ button {
   margin-left: auto;
 }
 
+.course-workspace-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.new-assignment-page {
+  padding: 8px 0 12px;
+}
+
+.new-assignment-header {
+  margin-bottom: 22px;
+}
+
+.new-assignment-header h3 {
+  margin: 18px 0 4px;
+  font-size: 1.45rem;
+}
+
+.new-assignment-header p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.new-assignment-form {
+  display: grid;
+  gap: 18px;
+}
+
+.new-assignment-form label,
+.language-options legend {
+  display: grid;
+  gap: 7px;
+  color: #8091ad;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.new-assignment-form input:not([type="checkbox"]),
+.new-assignment-form select,
+.new-assignment-form textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  padding: 11px 13px;
+  background: white;
+  color: var(--primary);
+  font: inherit;
+  font-size: 0.9rem;
+}
+
+.new-assignment-form textarea {
+  resize: vertical;
+}
+
+.assignment-form-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.course-points-row {
+  grid-template-columns: minmax(0, 1fr) 140px;
+}
+
+.deadline-row {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.assignment-form-help {
+  margin: -8px 0 0;
+  color: #8091ad;
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.language-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.language-options legend {
+  width: 100%;
+  padding: 0;
+}
+
+.language-options label,
+.late-submission-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--primary);
+  font-size: 0.85rem;
+  font-weight: 500;
+  text-transform: none;
+}
+
+.language-options input,
+.late-submission-option input {
+  accent-color: var(--brand);
+}
+
+.new-assignment-actions {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding-top: 4px;
+}
+
+.text-button {
+  border: 0;
+  padding: 10px 6px;
+  background: transparent;
+  color: var(--brand-strong);
+  cursor: pointer;
+  font-weight: 700;
+}
+
 .add-collaborator-page {
   max-width: 760px;
   padding: 8px 0 12px;
@@ -494,7 +618,17 @@ button {
 }
 
 .course-breadcrumb-course {
+  padding: 0;
+  border: 0;
+  background: transparent;
   color: var(--brand-strong);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.course-breadcrumb-course:hover {
+  text-decoration: underline;
 }
 
 .course-breadcrumb-chevron {
@@ -1055,51 +1189,11 @@ button {
   gap: 18px;
 }
 
-.course-overview-summary {
-  display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(220px, 0.6fr);
-  gap: 18px;
-}
-
-.course-overview-info,
-.course-overview-note,
 .course-info-section {
   border: 1px solid var(--line);
   border-radius: 14px;
   background: #f9fbff;
   padding: 18px;
-}
-
-.course-overview-info h3 {
-  margin: 5px 0 4px;
-  font-size: 1.4rem;
-}
-
-.course-overview-info > p {
-  margin: 0;
-  color: var(--muted);
-}
-
-.course-overview-info .course-detail-list {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  padding-bottom: 0;
-}
-
-.course-overview-note {
-  display: grid;
-  align-content: center;
-  gap: 8px;
-  background: #edf5ff;
-}
-
-.course-overview-note .material-symbols-outlined {
-  color: var(--brand-strong);
-}
-
-.course-overview-note p {
-  margin: 0;
-  color: var(--muted);
-  line-height: 1.5;
 }
 
 .course-overview-grid {
@@ -1520,9 +1614,17 @@ button {
     align-self: flex-end;
   }
 
-  .course-overview-summary,
+  .course-workspace-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .course-points-row,
+  .deadline-row {
+    grid-template-columns: 1fr;
+  }
+
   .course-overview-grid,
-  .course-overview-info .course-detail-list,
   .assignment-detail-grid {
     grid-template-columns: 1fr;
   }
