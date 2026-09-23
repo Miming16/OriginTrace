@@ -15,10 +15,24 @@ def connection():
         yield conn
 
 
-def student_checks_used(user_id: str) -> int:
+def student_checks_used(user_id: str, subject_id: str | None = None) -> int:
     with connection() as conn:
-        row = conn.execute("SELECT count(*) FROM submissions WHERE student_id = %s AND is_self_check = true AND submitted_at >= current_date", (user_id,)).fetchone()
+        row = conn.execute(
+            """SELECT count(*) FROM submissions
+               WHERE student_id = %s AND is_self_check = true
+                 AND submitted_at >= current_date
+                 AND (%s::uuid IS NULL OR subject_id = %s::uuid)""",
+            (user_id, subject_id, subject_id),
+        ).fetchone()
         return int(row[0])
+
+
+def student_check_limit(subject_id: str | None) -> int:
+    if not subject_id:
+        return 3
+    with connection() as conn:
+        row = conn.execute("SELECT self_check_limit FROM subjects WHERE id = %s", (subject_id,)).fetchone()
+    return int(row[0]) if row and row[0] is not None else 3
 
 
 def validate_student_subject(user_id: str, subject_id: str) -> None:

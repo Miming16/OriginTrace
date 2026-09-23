@@ -8,8 +8,8 @@ from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 from .auth import current_user, require_submission_role
-from .config import MAX_UPLOAD_BYTES, SELF_CHECK_LIMIT
-from .db import save_analysis, student_checks_used, validate_student_subject
+from .config import MAX_UPLOAD_BYTES
+from .db import save_analysis, student_check_limit, student_checks_used, validate_student_subject
 from .pipeline import analyze_directory, analyze_git_url, validate_language
 
 app = FastAPI(title="OriginTrace Analysis Service", version="0.1.0")
@@ -77,7 +77,7 @@ async def analyze(
             raise HTTPException(status_code=404, detail=str(error)) from error
         except RuntimeError as error:
             raise HTTPException(status_code=409, detail=str(error)) from error
-    if is_self_check and student_checks_used(user["sub"]) >= SELF_CHECK_LIMIT:
+    if is_self_check and student_checks_used(user["sub"], subject_id) >= student_check_limit(subject_id):
         raise HTTPException(status_code=429, detail="Daily self-check limit reached")
 
     try:

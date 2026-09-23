@@ -47,6 +47,19 @@ export default function StudentSelfCheck() {
   const selectedSubject = subjects.find((subject) => subject.id === selectedSubjectId);
   const remainingChecks = quota.remaining;
 
+  async function loadQuota(subjectId = selectedSubjectId) {
+    if (!subjectId) return;
+
+    try {
+      const response = await api.get('/student/self-checks/quota', {
+        params: { subject_id: subjectId },
+      });
+      setQuota(response.data);
+    } catch (error) {
+      setResult({ error: error.response?.data?.error || 'Failed to load your self-check quota.' });
+    }
+  }
+
   useEffect(() => {
     async function loadSubjects() {
       try {
@@ -69,17 +82,6 @@ export default function StudentSelfCheck() {
   useEffect(() => {
     if (!selectedSubjectId) return;
 
-    async function loadQuota() {
-      try {
-        const response = await api.get('/student/self-checks/quota', {
-          params: { subject_id: selectedSubjectId },
-        });
-        setQuota(response.data);
-      } catch (error) {
-        setResult({ error: error.response?.data?.error || 'Failed to load your self-check quota.' });
-      }
-    }
-
     loadQuota();
   }, [selectedSubjectId]);
 
@@ -101,10 +103,7 @@ export default function StudentSelfCheck() {
     try {
       const response = await analysisApi.post('/analyze', formData);
       setResult({ ...response.data, checking: false, checksUsed: 1 });
-      const quotaResponse = await api.get('/student/self-checks/quota', {
-        params: { subject_id: selectedSubjectId },
-      });
-      setQuota(quotaResponse.data);
+      await loadQuota();
     } catch (error) {
       setResult({
         checking: false,
@@ -268,7 +267,7 @@ export default function StudentSelfCheck() {
             <input type="file" onChange={(event) => setSelectedFile(event.target.files[0] || null)} disabled={Boolean(repoUrl)} />
             <span>Drop file / browse to upload</span>
           </label>
-          <button type="submit" className="student-run-check-button" disabled={result?.checking || loadingSubjects || !selectedSubject?.is_open}>
+          <button type="submit" className="student-run-check-button" disabled={result?.checking || loadingSubjects || !selectedSubject?.is_open || remainingChecks <= 0}>
             {result?.checking ? 'Analyzing...' : 'Run self-check'}
           </button>
         </form>

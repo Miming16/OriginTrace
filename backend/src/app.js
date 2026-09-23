@@ -80,12 +80,14 @@ app.get('/api/student/self-checks/quota', requireAuth, allowRoles('student'), as
       'SELECT COALESCE(MIN(self_check_limit), 3) AS limit FROM subjects WHERE id = $1',
       [subjectId],
     );
-    const usedRow = await pool.query(
-      `SELECT count(*)::int AS used FROM submissions
-       WHERE student_id = $1 AND is_self_check = true
-         AND submitted_at >= current_date`,
-      [req.user.sub],
-    );
+    const usedQuery = subjectId
+      ? `SELECT count(*)::int AS used FROM submissions
+         WHERE student_id = $1 AND subject_id = $2 AND is_self_check = true
+           AND submitted_at >= current_date`
+      : `SELECT count(*)::int AS used FROM submissions
+         WHERE student_id = $1 AND is_self_check = true
+           AND submitted_at >= current_date`;
+    const usedRow = await pool.query(usedQuery, subjectId ? [req.user.sub, subjectId] : [req.user.sub]);
     const limit = Number(limitRow.rows[0]?.limit ?? 3);
     const used = usedRow.rows[0].used;
     return res.json({ limit, used, remaining: Math.max(0, limit - used), window: 'daily' });

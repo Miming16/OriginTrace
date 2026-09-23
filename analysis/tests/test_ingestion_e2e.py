@@ -342,6 +342,29 @@ def test_the_self_check_quota_is_enforced_on_the_fourth_attempt(client, student,
     assert blocked.json()["detail"] == "Daily self-check limit reached"
 
 
+def test_subject_specific_self_check_limit_is_reported_and_enforced(client, student, self_check_subject):
+    with psycopg.connect(DATABASE_URL) as conn:
+        conn.execute("UPDATE subjects SET self_check_limit = 1 WHERE id = %s", (self_check_subject,))
+
+    headers = auth(student, "student")
+    first = client.post(
+        "/api/analyze",
+        data={"language": "python", "is_self_check": "true", "subject_id": self_check_subject},
+        files=upload("a.py", SMALL_SOURCE),
+        headers=headers,
+    )
+    assert first.status_code == 200, first.text
+
+    blocked = client.post(
+        "/api/analyze",
+        data={"language": "python", "is_self_check": "true", "subject_id": self_check_subject},
+        files=upload("b.py", SMALL_SOURCE),
+        headers=headers,
+    )
+    assert blocked.status_code == 429
+    assert blocked.json()["detail"] == "Daily self-check limit reached"
+
+
 def test_closed_subject_rejects_self_check(client, student, self_check_subject):
     with psycopg.connect(DATABASE_URL) as conn:
         conn.execute("UPDATE subjects SET is_open = false WHERE id = %s", (self_check_subject,))
