@@ -61,6 +61,8 @@ export default function InstructorDashboard() {
   const [courseAssignments, setCourseAssignments] = useState(DEFAULT_COURSE_CONTENT.assignments);
   const [collaboratorRequests, setCollaboratorRequests] = useState(DEFAULT_COLLABORATOR_REQUESTS);
   const [assignmentFilter, setAssignmentFilter] = useState('all');
+  const [submissionCourseFilter, setSubmissionCourseFilter] = useState('all');
+  const [submissionAssignmentFilter, setSubmissionAssignmentFilter] = useState('all');
   const [courseCollaborators, setCourseCollaborators] = useState({});
 
   const [loading, setLoading] = useState(true);
@@ -92,7 +94,19 @@ export default function InstructorDashboard() {
       setLoading(true);
       const res = await api.get('/instructor/submissions');
       const data = res.data?.submissions || [];
-      setSubmissions(data);
+      setSubmissions(data.map((submission) => {
+        const riskBand = submission.risk || submission.risk_band || 'low';
+        const assignment = submission.assignment || submission.assignment_name || submission.assignment_title || '';
+
+        return {
+          ...submission,
+          course: submission.course || submission.subject_code || 'Unknown course',
+          assignment,
+          submittedDate: submission.submittedDate || submission.submitted_at,
+          lang: submission.lang || submission.language,
+          risk: riskBand.charAt(0).toUpperCase() + riskBand.slice(1).toLowerCase(),
+        };
+      }));
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to fetch submissions.');
     } finally {
@@ -139,7 +153,20 @@ export default function InstructorDashboard() {
     }
   }
 
-  const selected = submissions.find((s) => s.id === selectedId);
+  const submissionCourseOptions = [...new Set(submissions.map((submission) => submission.course).filter(Boolean))].sort();
+  const submissionAssignmentOptions = [...new Set(
+    submissions.map((submission) => submission.assignment || 'Unassigned'),
+  )].sort();
+  const visibleSubmissions = submissions
+    .filter((submission) => (
+      submissionCourseFilter === 'all' || submission.course === submissionCourseFilter
+    ))
+    .filter((submission) => (
+      submissionAssignmentFilter === 'all'
+      || (submission.assignment || 'Unassigned') === submissionAssignmentFilter
+    ))
+    .sort((first, second) => new Date(second.submittedDate || 0) - new Date(first.submittedDate || 0));
+  const selected = visibleSubmissions.find((s) => s.id === selectedId);
 
   const lowCount = submissions.filter((s) => s.risk === 'Low').length;
   const mediumCount = submissions.filter((s) => s.risk === 'Medium').length;
@@ -298,16 +325,42 @@ export default function InstructorDashboard() {
               <div className="panel">
                 <div className="panel-header">
                   <h3>Recent submissions</h3>
-                  <span className="muted">{submissions.length} shown</span>
+                  <span className="muted">{visibleSubmissions.length} shown</span>
+                </div>
+
+                <div className="request-filter-bar submission-filter-bar">
+                  <label htmlFor="submission-course-filter">Course</label>
+                  <select
+                    id="submission-course-filter"
+                    value={submissionCourseFilter}
+                    onChange={(event) => setSubmissionCourseFilter(event.target.value)}
+                  >
+                    <option value="all">All courses</option>
+                    {submissionCourseOptions.map((course) => (
+                      <option key={course} value={course}>{course}</option>
+                    ))}
+                  </select>
+
+                  <label htmlFor="submission-assignment-filter">Assignment</label>
+                  <select
+                    id="submission-assignment-filter"
+                    value={submissionAssignmentFilter}
+                    onChange={(event) => setSubmissionAssignmentFilter(event.target.value)}
+                  >
+                    <option value="all">All assignments</option>
+                    {submissionAssignmentOptions.map((assignment) => (
+                      <option key={assignment} value={assignment}>{assignment}</option>
+                    ))}
+                  </select>
                 </div>
 
                 {loading ? (
                   <p className="loading-state">Loading submissions...</p>
-                ) : submissions.length === 0 ? (
+                ) : visibleSubmissions.length === 0 ? (
                   <p className="empty-state">No submissions found.</p>
                 ) : (
                   <div className="submission-table">
-                    {submissions.map((s) => (
+                    {visibleSubmissions.map((s) => (
                       <div
                         key={s.id}
                         className={selectedId === s.id ? 'submission-row active' : 'submission-row'}
@@ -316,7 +369,7 @@ export default function InstructorDashboard() {
                         <div>
                           <strong>{s.student || s.name || s.studentName}</strong>
                           <p>
-                            {s.subject || s.course} · Status: <em>{s.status || 'Submitted'}</em> · {s.submittedDate || s.time || 'N/A'}
+                            {s.course} · {s.assignment || 'Unassigned'} · Status: <em>{s.status || 'Submitted'}</em> · {s.submittedDate ? new Date(s.submittedDate).toLocaleString() : 'N/A'}
                           </p>
                         </div>
                         <div className="submission-row-meta">
@@ -330,10 +383,9 @@ export default function InstructorDashboard() {
                     ))}
                   </div>
                 )}
-              </div>
 
-              {selected ? (
-                <div className="panel detail-panel">
+                {selected && (
+                  <div className="detail-panel">
                   <div className="panel-header">
                     <h3>{selected.student || selected.name || selected.studentName}</h3>
                     <span className={`risk-badge ${RISK_META[selected.risk]?.cls || 'risk-low'}`}>
@@ -426,12 +478,9 @@ export default function InstructorDashboard() {
                       </div>
                     </>
                   )}
-                </div>
-              ) : (
-                <div className="panel detail-panel empty-detail">
-                  <p className="empty-state">Select a submission from the table above to view detail analysis.</p>
-                </div>
-              )}
+                  </div>
+                )}
+              </div>
             </>
           )}
 
