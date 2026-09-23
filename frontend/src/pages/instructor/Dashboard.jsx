@@ -15,6 +15,29 @@ const DEFAULT_COURSES = [
   { id: 'cs302', subject_code: 'CS302', subject_title: 'Introduction to Programming', enrolled_count: 0, is_open: true },
 ];
 
+const DEFAULT_COLLABORATOR_REQUESTS = {
+  cs101: [
+    { id: 'request-sarah', name: 'Sarah Connor', initials: 'SC', assignment: 'Lab 5', repository: 'github.com/sconnor/cs101-lab5', language: 'Python', invited: 'Invited 2h ago' },
+    { id: 'request-james', name: 'James Reyes', initials: 'JR', assignment: 'Lab 4', repository: 'github.com/jreyes/cs101-lab4', language: 'C', invited: 'Invited 5h ago' },
+  ],
+};
+
+const DEFAULT_SUBMISSION_ACTIVITY = [
+  { student: 'Sarah Connor', submittedAt: '2026-09-20T08:15:00' },
+  { student: 'James Reyes', submittedAt: '2026-09-20T10:40:00' },
+  { student: 'Maya Santos', submittedAt: '2026-09-21T09:05:00' },
+];
+
+const DEFAULT_COURSE_CONTENT = {
+  assignments: [
+    { id: 'lab-1', title: 'Lab 1 - Programming Basics', due: 'Due Sep 20', status: '24 submissions', createdAt: '2026-09-01', submissions: DEFAULT_SUBMISSION_ACTIVITY },
+    { id: 'lab-2', title: 'Lab 2 - Variables and Data Types', due: 'Due Sep 27', status: '22 submissions', createdAt: '2026-09-05', submissions: DEFAULT_SUBMISSION_ACTIVITY },
+    { id: 'lab-3', title: 'Lab 3 - Functions', due: 'Due Oct 4', status: '20 submissions', createdAt: '2026-09-10', submissions: DEFAULT_SUBMISSION_ACTIVITY },
+    { id: 'lab-4', title: 'Lab 4 - Control Flow', due: 'Due Oct 11', status: '18 submissions', createdAt: '2026-09-15', submissions: DEFAULT_SUBMISSION_ACTIVITY },
+    { id: 'lab-5', title: 'Lab 5 - Functions and Modules', due: 'Due Oct 18', status: '12 submissions', createdAt: '2026-09-20', submissions: DEFAULT_SUBMISSION_ACTIVITY },
+  ],
+};
+
 const RISK_META = {
   Low: { cls: 'risk-low', text: 'text-risk-low' },
   Medium: { cls: 'risk-medium', text: 'text-risk-medium' },
@@ -32,9 +55,10 @@ export default function InstructorDashboard() {
   const [selectedId, setSelectedId] = useState(null);
   const [detailData, setDetailData] = useState(null);
   const [selectedCourse, setSelectedCourse] = useState(null);
-  const [showCollaboratorForm, setShowCollaboratorForm] = useState(false);
-  const [collaboratorName, setCollaboratorName] = useState('');
-  const [collaboratorEmail, setCollaboratorEmail] = useState('');
+  const [selectedAssignment, setSelectedAssignment] = useState(null);
+  const [showCollaboratorRequestsPage, setShowCollaboratorRequestsPage] = useState(false);
+  const [collaboratorRequests, setCollaboratorRequests] = useState(DEFAULT_COLLABORATOR_REQUESTS);
+  const [assignmentFilter, setAssignmentFilter] = useState('all');
   const [courseCollaborators, setCourseCollaborators] = useState({});
 
   const [loading, setLoading] = useState(true);
@@ -126,20 +150,27 @@ export default function InstructorDashboard() {
     { label: 'Low risk', value: lowCount, badge: 'check_circle' },
   ];
 
-  function handleAddCollaborator(event) {
-    event.preventDefault();
+  const selectedCourseRequests = selectedCourse
+    ? collaboratorRequests[selectedCourse.id] || []
+    : [];
+  const visibleCollaboratorRequests = assignmentFilter === 'all'
+    ? selectedCourseRequests
+    : selectedCourseRequests.filter((request) => request.assignment === assignmentFilter);
+  const assignmentOptions = [...new Set(selectedCourseRequests.map((request) => request.assignment))];
+  const orderedAssignments = [...DEFAULT_COURSE_CONTENT.assignments].sort(
+    (first, second) => new Date(first.createdAt) - new Date(second.createdAt),
+  );
+  const orderedSubmissionActivity = selectedAssignment
+    ? [...(selectedAssignment.submissions || [])].sort(
+        (first, second) => new Date(first.submittedAt) - new Date(second.submittedAt),
+      )
+    : [];
 
-    const name = collaboratorName.trim();
-    const email = collaboratorEmail.trim();
-    if (!name || !email) return;
-
-    setCourseCollaborators((current) => ({
+  function handleCollaboratorRequest(requestId) {
+    setCollaboratorRequests((current) => ({
       ...current,
-      [selectedCourse.id]: [...(current[selectedCourse.id] || []), { id: Date.now(), name, email }],
+      [selectedCourse.id]: (current[selectedCourse.id] || []).filter((request) => request.id !== requestId),
     }));
-    setCollaboratorName('');
-    setCollaboratorEmail('');
-    setShowCollaboratorForm(false);
   }
 
   return (
@@ -194,6 +225,7 @@ export default function InstructorDashboard() {
                   onClick={() => {
                     setSelectedCourse(course);
                     setIsCourseMenuOpen(false);
+                    setShowCollaboratorRequestsPage(false);
                   }}
                 >
                   <strong>{course.subject_code}</strong>
@@ -211,7 +243,9 @@ export default function InstructorDashboard() {
             {activeNav === 'dashboard'
               ? 'Instructor Dashboard'
               : activeNav === 'courses'
-              ? 'Courses'
+              ? showCollaboratorRequestsPage
+                ? 'Collaborator Requests'
+                : 'Courses'
               : activeNav === 'flags'
               ? 'Flags'
               : 'Profile & Settings'}
@@ -381,114 +415,177 @@ export default function InstructorDashboard() {
 
           {activeNav === 'courses' && (
             <div className="panel">
-              <div className="panel-header">
-                <h3>Course roster</h3>
-                <button
-                  type="button"
-                  className="primary-button small add-collaborator-button"
-                  disabled={!selectedCourse}
-                  onClick={() => setShowCollaboratorForm((value) => !value)}
-                >
-                  Add Collaborator +
-                </button>
-              </div>
+              {!showCollaboratorRequestsPage ? (
+                <div className="panel-header course-workspace-header">
+                  <div className="course-page-title">
+                    <span className="muted">Course workspace</span>
+                    <h3>{selectedCourse?.subject_code || 'Course roster'}</h3>
+                    {selectedCourse && <p>{selectedCourse.subject_title}</p>}
+                  </div>
+                  <button
+                    type="button"
+                    className="primary-button small add-collaborator-button"
+                    disabled={!selectedCourse}
+                    onClick={() => setShowCollaboratorRequestsPage(true)}
+                  >
+                    Collaborator Request
+                  </button>
+                </div>
+              ) : null}
               {courses.length === 0 ? (
                 <p className="empty-state">No courses are assigned to this instructor yet.</p>
-              ) : (
-                <div className="course-roster-layout">
-                  <div className="course-grid">
-                    {courses.map((course) => (
-                      <button
-                        type="button"
-                        key={course.id}
-                        className={selectedCourse?.id === course.id ? 'course-card selected' : 'course-card'}
-                        onClick={() => setSelectedCourse(course)}
-                      >
-                        <h4>{course.subject_code}</h4>
-                        <p>{course.subject_title}</p>
-                        <small>{course.enrolled_count || 0} enrolled</small>
-                      </button>
-                    ))}
+              ) : showCollaboratorRequestsPage ? (
+                <div className="collaborator-request-page">
+                  <div className="collaborator-request-page-header">
+                    <div className="course-breadcrumb" aria-label="Course navigation">
+                      <span className="course-breadcrumb-course">
+                        {selectedCourse.subject_code} - {selectedCourse.subject_title}
+                      </span>
+                      <span className="material-symbols-outlined course-breadcrumb-chevron">chevron_right</span>
+                      <strong>Collaborator Requests</strong>
+                    </div>
                   </div>
 
-                  {selectedCourse && <aside className="course-side-panel">
-                    <div className="course-side-panel-header">
-                      <div>
-                        <span className="muted">Assigned course</span>
-                        <h3>{selectedCourse.subject_code}</h3>
-                      </div>
-                      <button
-                        type="button"
-                        className="close-panel-button"
-                        onClick={() => setSelectedCourse(null)}
-                        aria-label="Close course details"
+                  <div className="collaborator-request-list">
+                    <div className="collaborator-request-course-header">
+                      <strong>{selectedCourse.subject_code} - {selectedCourse.subject_title}</strong>
+                      <span>{visibleCollaboratorRequests.length} pending</span>
+                    </div>
+                    <div className="request-filter-bar">
+                      <label htmlFor="assignment-filter">Filter by assignment</label>
+                      <select
+                        id="assignment-filter"
+                        value={assignmentFilter}
+                        onChange={(event) => setAssignmentFilter(event.target.value)}
                       >
-                        <span className="material-symbols-outlined">close</span>
-                      </button>
+                        <option value="all">All assignments</option>
+                        {assignmentOptions.map((assignment) => (
+                          <option key={assignment} value={assignment}>{assignment}</option>
+                        ))}
+                      </select>
                     </div>
-
-                    <div className="course-detail-list">
-                      <div><span>Course title</span><strong>{selectedCourse.subject_title}</strong></div>
-                      <div><span>Instructor</span><strong>{user?.fullName || 'Assigned instructor'}</strong></div>
-                      <div><span>Enrollment</span><strong>{selectedCourse.enrolled_count || 0} students</strong></div>
-                      <div><span>Availability</span><strong>{selectedCourse.is_open ? 'Open' : 'Closed'}</strong></div>
-                    </div>
-
-                    <div className="course-collaborators">
-                <div className="course-collaborators-header">
-                  <div>
-                    <h3>Collaborators</h3>
-                    <p className="muted">People who can help review this course.</p>
-                  </div>
-                  <span className="muted">{(courseCollaborators[selectedCourse.id] || []).length} added</span>
-                </div>
-
-                {showCollaboratorForm && (
-                  <form className="collaborator-form" onSubmit={handleAddCollaborator}>
-                    <label>
-                      Name
-                      <input
-                        type="text"
-                        value={collaboratorName}
-                        onChange={(event) => setCollaboratorName(event.target.value)}
-                        placeholder="Collaborator name"
-                        required
-                      />
-                    </label>
-                    <label>
-                      Email
-                      <input
-                        type="email"
-                        value={collaboratorEmail}
-                        onChange={(event) => setCollaboratorEmail(event.target.value)}
-                        placeholder="name@school.edu"
-                        required
-                      />
-                    </label>
-                    <div className="collaborator-form-actions">
-                      <button type="submit" className="primary-button small">Add collaborator</button>
-                      <button type="button" className="ghost-button small" onClick={() => setShowCollaboratorForm(false)}>Cancel</button>
-                    </div>
-                  </form>
-                )}
-
-                {(courseCollaborators[selectedCourse.id] || []).length === 0 ? (
-                  <p className="empty-state">No collaborators added to this course yet.</p>
-                ) : (
-                  <div className="collaborator-list">
-                    {courseCollaborators[selectedCourse.id].map((collaborator) => (
-                      <div key={collaborator.id} className="collaborator-row">
-                        <div>
-                          <strong>{collaborator.name}</strong>
-                          <p>{collaborator.email}</p>
+                    {visibleCollaboratorRequests.length === 0 ? (
+                      <p className="empty-state collaborator-request-empty">No pending collaborator requests.</p>
+                    ) : (
+                      visibleCollaboratorRequests.map((request) => (
+                        <div key={request.id} className="collaborator-request-row">
+                          <div className="request-person">
+                            <span className="request-avatar">{request.initials}</span>
+                            <div>
+                              <strong>{request.name}</strong>
+                              <p>{request.assignment} - {request.repository}</p>
+                              <div className="request-meta">
+                                <span>{request.language}</span>
+                                <small>{request.invited}</small>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="request-actions">
+                            <span className="pending-badge">Pending</span>
+                            <button type="button" className="accept-button" onClick={() => handleCollaboratorRequest(request.id)}>Accept</button>
+                            <button type="button" className="decline-button" onClick={() => handleCollaboratorRequest(request.id)}>Decline</button>
+                          </div>
                         </div>
-                        <span className="status-pill">Active</span>
-                      </div>
-                    ))}
+                      ))
+                    )}
                   </div>
-                )}
+                </div>
+              ) : (
+                <div className="course-overview">
+                  <div className="course-overview-summary">
+                    <div className="course-overview-info">
+                      <span className="muted">Subject information</span>
+                      <h3>{selectedCourse?.subject_code}</h3>
+                      <p>{selectedCourse?.subject_title}</p>
+                      <div className="course-detail-list">
+                        <div><span>Instructor</span><strong>{user?.fullName || 'Assigned instructor'}</strong></div>
+                        <div><span>Enrollment</span><strong>{selectedCourse?.enrolled_count || 0} students</strong></div>
+                        <div><span>Availability</span><strong>{selectedCourse?.is_open ? 'Open' : 'Closed'}</strong></div>
+                      </div>
                     </div>
-                  </aside>}
+                    <div className="course-overview-note">
+                      <span className="material-symbols-outlined">school</span>
+                      <strong>Course workspace</strong>
+                      <p>Review course activity, assignments, and announcements from one place.</p>
+                    </div>
+                  </div>
+
+                  <div className="course-overview-grid">
+                    <section className="course-info-section">
+                      {selectedAssignment ? (
+                        <div className="assignment-detail-view">
+                          <button
+                            type="button"
+                            className="back-link"
+                            onClick={() => setSelectedAssignment(null)}
+                          >
+                            <span className="material-symbols-outlined">arrow_back</span>
+                            Back to assignments
+                          </button>
+                          <div className="assignment-detail-heading">
+                            <span className="muted">Assignment</span>
+                            <h3>{selectedAssignment.title}</h3>
+                            <p>Part of {selectedCourse?.subject_code} - {selectedCourse?.subject_title}</p>
+                          </div>
+                          <div className="assignment-detail-grid">
+                            <div>
+                              <span>Due date</span>
+                              <strong>{selectedAssignment.due}</strong>
+                            </div>
+                            <div>
+                              <span>Created</span>
+                              <strong>{selectedAssignment.createdAt}</strong>
+                            </div>
+                            <div>
+                              <span>Submissions</span>
+                              <strong>{selectedAssignment.status}</strong>
+                            </div>
+                          </div>
+                          <div className="submission-activity">
+                            <div className="course-info-section-header">
+                              <h3>Submitted by</h3>
+                              <span className="muted">{orderedSubmissionActivity.length} shown</span>
+                            </div>
+                            <div className="submission-activity-list">
+                              {orderedSubmissionActivity.map((submission) => (
+                                <div key={`${selectedAssignment.id}-${submission.student}`} className="submission-activity-row">
+                                  <strong>{submission.student}</strong>
+                                  <span>{new Date(submission.submittedAt).toLocaleString()}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="course-info-section-header">
+                            <h3>Assignments</h3>
+                            <span className="muted">{orderedAssignments.length} active</span>
+                          </div>
+                          <div className="course-item-list">
+                            {orderedAssignments.map((assignment) => (
+                              <button
+                                type="button"
+                                key={assignment.id}
+                                className="course-item-row assignment-row"
+                                onClick={() => setSelectedAssignment(assignment)}
+                              >
+                                <span className="assignment-row-content">
+                                  <strong>{assignment.title}</strong>
+                                  <span>{assignment.due}</span>
+                                </span>
+                                <span className="assignment-row-action">
+                                  <small>{assignment.status}</small>
+                                  <span className="material-symbols-outlined">chevron_right</span>
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        </>
+                      )}
+                    </section>
+
+                  </div>
                 </div>
               )}
             </div>
