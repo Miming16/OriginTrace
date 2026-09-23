@@ -1143,6 +1143,44 @@ button {
   gap: 18px;
 }
 
+.profile-settings-page { display: grid; gap: 18px; }
+.profile-settings-top, .profile-settings-bottom { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 18px; }
+.profile-card { display: flex; align-items: center; flex-direction: column; padding: 24px 22px; text-align: center; }
+.profile-avatar { display: grid; place-items: center; width: 76px; height: 76px; margin-bottom: 12px; border-radius: 50%; background: #e5eefb; color: var(--brand-strong); font-size: 1.35rem; font-weight: 800; }
+.profile-card h3 { margin: 0; font-size: 1.05rem; }
+.profile-card > p { margin: 5px 0 10px; color: var(--muted); font-size: 0.8rem; }
+.role-badge { padding: 5px 12px; border-radius: 999px; background: #e6f1ff; color: var(--brand-strong); font-size: 0.72rem; font-weight: 700; }
+.profile-details { width: 100%; display: grid; gap: 10px; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); }
+.profile-details div { display: flex; justify-content: space-between; gap: 12px; text-align: left; }
+.profile-details span, .settings-field p, .device-tracking-field p { color: #8a9db9; font-size: 0.75rem; }
+.profile-details strong { font-size: 0.76rem; text-align: right; }
+.settings-panel-heading { margin-bottom: 14px; }
+.settings-panel-heading p { margin: 4px 0 0; color: var(--muted); font-size: 0.8rem; }
+.connected-accounts-panel { min-height: 162px; }
+.connected-account-row, .integration-row, .sync-status { border: 1px solid var(--line); border-radius: 13px; padding: 13px 14px; }
+.connected-account-row, .integration-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.connected-account-name, .integration-row > div { display: flex; align-items: center; gap: 10px; }
+.connected-account-name > div, .integration-row > div { display: grid; gap: 3px; }
+.connected-account-name span:last-child, .integration-row span, .sync-status span { color: #8a9db9; font-size: 0.72rem; }
+.github-mark { display: grid; place-items: center; width: 24px; height: 24px; color: #17202d; font-size: 1.2rem; }
+.dark-button { border: 0; border-radius: 10px; padding: 9px 15px; background: #20252b; color: white; font-size: 0.75rem; font-weight: 700; }
+.detection-panel, .integrations-panel { padding: 22px; }
+.settings-section-title { margin-bottom: 16px; color: #264a73; font-size: 0.85rem; }
+.settings-field, .device-tracking-field { display: grid; gap: 7px; margin-bottom: 16px; }
+.settings-field label, .device-tracking-field > label:first-child { font-size: 0.78rem; font-weight: 700; }
+.settings-field p, .device-tracking-field p { margin: 0; }
+.fixed-setting, .settings-field select { width: 100%; min-height: 40px; border: 1px solid var(--line); border-radius: 11px; padding: 10px 12px; background: #f3f6fa; color: var(--primary); }
+.fixed-setting { display: flex; justify-content: space-between; align-items: center; font-size: 0.78rem; }
+.fixed-setting span, .integration-row b { color: var(--success); font-size: 0.75rem; }
+.settings-field select { background: white; }
+.checkbox-label { display: flex; align-items: center; gap: 7px; font-size: 0.78rem; }
+.checkbox-label input { accent-color: var(--brand); }
+.integrations-panel { display: grid; align-content: start; gap: 10px; }
+.integrations-panel .settings-section-title { margin-bottom: 2px; }
+.sync-status { display: grid; gap: 4px; background: #f0f4f9; }
+.sync-bar { height: 4px; margin-top: 6px; overflow: hidden; border-radius: 5px; background: #e4ebf4; }
+.sync-bar i { display: block; width: 78%; height: 100%; background: #5d91d8; }
+
 .github-card {
   border: 1px solid var(--line);
   border-radius: 14px;
@@ -1657,6 +1695,8 @@ button {
   .stats-grid,
   .detail-grid,
   .profile-layout,
+  .profile-settings-top,
+  .profile-settings-bottom,
   .submission-panel-grid,
   .course-grid {
     grid-template-columns: 1fr 1fr;

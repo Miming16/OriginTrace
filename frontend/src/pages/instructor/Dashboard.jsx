@@ -868,17 +868,75 @@ export default function InstructorDashboard() {
           )}
 
           {activeNav === 'settings' && (
-            <div className="profile-layout">
-              <div className="panel">
-                <div className="panel-header">
-                  <h3>Account</h3>
-                </div>
-                <div className="settings-list">
-                  <div><span>Instructor</span><strong>{user?.fullName}</strong></div>
-                  <div><span>Department</span><strong>Computer Science</strong></div>
-                  <div><span>Region</span><strong>USJR</strong></div>
-                  <div><span>Security</span><strong>JWT + HTTPS</strong></div>
-                </div>
+            <div className="profile-settings-page">
+              <div className="profile-settings-top">
+                <section className="panel profile-card">
+                  <div className="profile-avatar">{(user?.fullName || 'Instructor').slice(0, 2).toUpperCase()}</div>
+                  <h3>{user?.fullName || 'Instructor'}</h3>
+                  <p>Computer Science Department</p>
+                  <span className="role-badge">Instructor</span>
+                  <div className="profile-details">
+                    <div><span>Employee no.</span><strong>{user?.id_number || user?.idNumber || 'FAC-0087'}</strong></div>
+                    <div><span>Email</span><strong>{user?.email || 'd.ramos@university.edu'}</strong></div>
+                    <div><span>Courses</span><strong>CS101 · CS205 · CS302</strong></div>
+                  </div>
+                </section>
+
+                <section className="panel connected-accounts-panel">
+                  <div className="panel-header settings-panel-heading">
+                    <div>
+                      <h3>Connected Accounts</h3>
+                      <p>Connect your GitHub account to accept student repository invites and review coursework repos.</p>
+                    </div>
+                  </div>
+                  <div className="connected-account-row">
+                    <div className="connected-account-name">
+                      <span className="github-mark">●</span>
+                      <div><strong>GitHub</strong><span>Not connected</span></div>
+                    </div>
+                    <button type="button" className="dark-button">Connect GitHub</button>
+                  </div>
+                </section>
+              </div>
+
+              <div className="profile-settings-bottom">
+                <section className="panel detection-panel">
+                  <div className="settings-section-title">Detection Parameters</div>
+                  <div className="settings-field">
+                    <label htmlFor="sensitivity">Sensitivity</label>
+                    <div className="fixed-setting"><strong>Always Maximum</strong><span>✓ Fixed</span></div>
+                    <p>Detection always runs at full sensitivity — every signal is collected and scored. Flags remain advisory.</p>
+                  </div>
+                  <div className="settings-field">
+                    <label htmlFor="risk-threshold">Risk Threshold</label>
+                    <select id="risk-threshold" defaultValue="50% · Standard">
+                      <option>50% · Standard</option>
+                      <option>70% · High confidence</option>
+                      <option>30% · Early warning</option>
+                    </select>
+                  </div>
+                  <div className="settings-field">
+                    <label htmlFor="comparison-limit">Comparison Limit</label>
+                    <select id="comparison-limit" defaultValue="250 submissions per batch">
+                      <option>250 submissions per batch</option>
+                      <option>500 submissions per batch</option>
+                      <option>1000 submissions per batch</option>
+                    </select>
+                    <p>Estimated load time: ~12s for 250 submissions</p>
+                  </div>
+                  <div className="device-tracking-field">
+                    <label htmlFor="device-tracking">Device Tracking</label>
+                    <label className="checkbox-label"><input id="device-tracking" type="checkbox" defaultChecked /> Track MAC addresses for provenance</label>
+                    <p>Helps identify if code is written on multiple devices</p>
+                  </div>
+                </section>
+
+                <section className="panel integrations-panel">
+                  <div className="settings-section-title">Integrations</div>
+                  <div className="integration-row"><div><strong>Keystroke Extension</strong><span>Provenance metadata tracking</span></div><b>✓ Active</b></div>
+                  <div className="integration-row"><div><strong>PostgreSQL</strong><span>Docker · Self-Hosted</span></div><b>✓ Online</b></div>
+                  <div className="sync-status"><strong>▣ Sync Status</strong><span>Last sync: 2 minutes ago · 142 submissions indexed</span><div className="sync-bar"><i /></div></div>
+                </section>
               </div>
             </div>
           )}
