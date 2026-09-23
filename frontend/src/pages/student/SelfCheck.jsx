@@ -395,9 +395,16 @@ export default function StudentSelfCheck() {
 
     return (
       <div className="student-assignment-detail">
-        <button type="button" className="back-link student-detail-back" onClick={() => setSelectedHistoryEntry(null)}>
+        <button
+          type="button"
+          className="back-link student-detail-back"
+          onClick={() => {
+            setSelectedHistoryEntry(null);
+            setActiveView('dashboard');
+          }}
+        >
           <span className="material-symbols-outlined">arrow_back</span>
-          Back to History
+          Back to Dashboard
         </button>
 
         <section className="panel assignment-detail-hero">
