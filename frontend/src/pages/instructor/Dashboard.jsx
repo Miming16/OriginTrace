@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../api/axios';
 
@@ -61,9 +61,12 @@ export default function InstructorDashboard() {
   const [courseAssignments, setCourseAssignments] = useState(DEFAULT_COURSE_CONTENT.assignments);
   const [collaboratorRequests, setCollaboratorRequests] = useState(DEFAULT_COLLABORATOR_REQUESTS);
   const [assignmentFilter, setAssignmentFilter] = useState('all');
+  const [submissionAttempts, setSubmissionAttempts] = useState('Unlimited');
   const [submissionCourseFilter, setSubmissionCourseFilter] = useState('all');
   const [submissionAssignmentFilter, setSubmissionAssignmentFilter] = useState('all');
   const [courseCollaborators, setCourseCollaborators] = useState({});
+  const descriptionEditorRef = useRef(null);
+  const descriptionSelectionRef = useRef(null);
 
   const [loading, setLoading] = useState(true);
   const [loadingDetail, setLoadingDetail] = useState(false);
@@ -207,12 +210,18 @@ export default function InstructorDashboard() {
     const formData = new FormData(event.currentTarget);
     const title = String(formData.get('title') || '').trim();
     const deadline = String(formData.get('deadline') || '').trim();
+    const description = String(formData.get('description') || '').trim();
+    const attempts = submissionAttempts === 'Custom'
+      ? String(formData.get('attemptsCustom') || '').trim()
+      : submissionAttempts;
 
     setCourseAssignments((current) => [
       ...current,
       {
         id: `assignment-${Date.now()}`,
         title,
+        description,
+        attempts,
         due: deadline ? `Due ${deadline}` : 'No deadline',
         status: '0 submissions',
         createdAt: new Date().toISOString(),
@@ -220,6 +229,46 @@ export default function InstructorDashboard() {
       },
     ]);
     setShowNewAssignmentPage(false);
+  }
+
+  function saveDescriptionSelection() {
+    const selection = window.getSelection();
+    if (!selection?.rangeCount || !descriptionEditorRef.current?.contains(selection.anchorNode)) return;
+
+    descriptionSelectionRef.current = selection.getRangeAt(0).cloneRange();
+  }
+
+  function restoreDescriptionSelection() {
+    const savedRange = descriptionSelectionRef.current;
+    if (!savedRange) return;
+
+    const selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(savedRange);
+  }
+
+  function runDescriptionCommand(command, value = null) {
+    descriptionEditorRef.current?.focus();
+    restoreDescriptionSelection();
+    document.execCommand(command, false, value);
+  }
+
+  function renderDescriptionTool(label, icon, command, value = null) {
+    return (
+      <button
+        type="button"
+        className="description-tool"
+        aria-label={label}
+        title={label}
+        onMouseDown={(event) => {
+          saveDescriptionSelection();
+          event.preventDefault();
+        }}
+        onClick={() => runDescriptionCommand(command, value)}
+      >
+        <span className="material-symbols-outlined">{icon}</span>
+      </button>
+    );
   }
 
   return (
@@ -588,17 +637,11 @@ export default function InstructorDashboard() {
                         Back to course
                       </button>
                       <h3>New Assignment</h3>
-                      <p>Students see the title, instructions, and deadline. Detection settings apply per assignment.</p>
+                      <p>Students see the title, instructions, and deadline.</p>
                     </div>
                   </div>
                   <form className="new-assignment-form" onSubmit={handleCreateAssignment}>
-                    <div className="assignment-form-grid course-points-row">
-                      <label>
-                        Course
-                        <select name="course" defaultValue={selectedCourse?.id || ''}>
-                          <option value={selectedCourse?.id || ''}>{selectedCourse?.subject_code} - {selectedCourse?.subject_title}</option>
-                        </select>
-                      </label>
+                    <div className="assignment-form-grid points-row">
                       <label>
                         Points
                         <input name="points" type="number" min="0" defaultValue="100" />
@@ -608,27 +651,99 @@ export default function InstructorDashboard() {
                       Title
                       <input name="title" required placeholder="e.g. Lab 7 - Classes & Objects" autoFocus />
                     </label>
-                    <label>
+                    <label className="description-field">
                       Description / Instructions
-                      <textarea name="description" rows="4" placeholder="What students need to build, constraints, grading notes..." />
+                      <div className="description-editor">
+                        <div className="description-toolbar" role="toolbar" aria-label="Description formatting">
+                          {renderDescriptionTool('Undo', 'undo', 'undo')}
+                          {renderDescriptionTool('Redo', 'redo', 'redo')}
+                          <span className="description-toolbar-divider" />
+                          <select className="description-style-select" aria-label="Text style" defaultValue="p" onMouseDown={saveDescriptionSelection} onChange={(event) => runDescriptionCommand('formatBlock', event.target.value)}>
+                            <option value="p">Normal text</option>
+                            <option value="h2">Heading</option>
+                            <option value="h3">Subheading</option>
+                          </select>
+                          <select className="description-font-select" aria-label="Font" defaultValue="Arial" onMouseDown={saveDescriptionSelection} onChange={(event) => runDescriptionCommand('fontName', event.target.value)}>
+                            <option>Arial</option>
+                            <option>Georgia</option>
+                            <option>Verdana</option>
+                          </select>
+                          <select className="description-size-select" aria-label="Font size" defaultValue="3" onMouseDown={saveDescriptionSelection} onChange={(event) => runDescriptionCommand('fontSize', event.target.value)}>
+                            <option value="2">10</option>
+                            <option value="3">11</option>
+                            <option value="4">14</option>
+                            <option value="5">18</option>
+                          </select>
+                          {renderDescriptionTool('Bold', 'format_bold', 'bold')}
+                          {renderDescriptionTool('Italic', 'format_italic', 'italic')}
+                          {renderDescriptionTool('Underline', 'format_underlined', 'underline')}
+                          {renderDescriptionTool('Insert link', 'link', 'createLink', 'https://')}
+                          {renderDescriptionTool('Bulleted list', 'format_list_bulleted', 'insertUnorderedList')}
+                          {renderDescriptionTool('Numbered list', 'format_list_numbered', 'insertOrderedList')}
+                          {renderDescriptionTool('Align left', 'format_align_left', 'justifyLeft')}
+                          {renderDescriptionTool('Align center', 'format_align_center', 'justifyCenter')}
+                          {renderDescriptionTool('Align right', 'format_align_right', 'justifyRight')}
+                          {renderDescriptionTool('Justify text', 'format_align_justify', 'justifyFull')}
+                          {renderDescriptionTool('Clear formatting', 'format_clear', 'removeFormat')}
+                        </div>
+                        <div
+                          ref={descriptionEditorRef}
+                          className="description-editor-content"
+                          contentEditable
+                          role="textbox"
+                          aria-multiline="true"
+                          data-placeholder="What students need to build, constraints, grading notes..."
+                          onMouseUp={saveDescriptionSelection}
+                          onKeyUp={saveDescriptionSelection}
+                          onBlur={saveDescriptionSelection}
+                          onInput={(event) => {
+                            event.currentTarget.nextElementSibling.value = event.currentTarget.innerHTML;
+                          }}
+                          suppressContentEditableWarning
+                        />
+                        <input type="hidden" name="description" />
+                      </div>
                     </label>
                     <div className="assignment-form-grid deadline-row">
                       <label>
                         Deadline date
-                        <input name="deadline" type="date" />
+                        <input
+                          name="deadline"
+                          type="text"
+                          placeholder="mm/dd/yy"
+                          inputMode="numeric"
+                          pattern="(?:0[1-9]|1[0-2])/(?:0[1-9]|[12][0-9]|3[01])/\\d{2}"
+                          title="Use the format mm/dd/yy"
+                        />
                       </label>
                       <label>
                         Deadline time
                         <input name="deadlineTime" type="time" defaultValue="23:59" />
                       </label>
-                      <label>
+                      <label className="attempts-field">
                         Submission attempts
-                        <select name="attempts" defaultValue="Unlimited">
+                        <select
+                          name="attempts"
+                          value={submissionAttempts}
+                          onChange={(event) => setSubmissionAttempts(event.target.value)}
+                        >
                           <option>Unlimited</option>
                           <option>1</option>
                           <option>3</option>
                           <option>5</option>
+                          <option>Custom</option>
                         </select>
+                        {submissionAttempts === 'Custom' && (
+                          <input
+                            name="attemptsCustom"
+                            type="number"
+                            min="1"
+                            step="1"
+                            required
+                            placeholder="Enter number"
+                            aria-label="Custom submission attempts"
+                          />
+                        )}
                       </label>
                       <label>
                         Self-check limit
