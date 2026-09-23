@@ -40,7 +40,7 @@ app.post('/api/auth/login', async (req, res, next) => {
 app.get('/api/me', requireAuth, async (req, res, next) => {
   try {
     const result = await requirePool().query(
-      'SELECT id, id_number, role, full_name FROM users WHERE id = $1',
+      'SELECT id, id_number, email, role, full_name FROM users WHERE id = $1',
       [req.user.sub],
     );
     if (!result.rows[0]) return res.status(404).json({ error: 'User not found' });

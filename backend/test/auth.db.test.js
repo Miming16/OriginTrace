@@ -17,9 +17,9 @@ import { pool } from '../src/db.js';
 const skip = process.env.DATABASE_URL ? false : 'DATABASE_URL is not set';
 
 const SEED = {
-  student: { id_number: '2023018093', id: '11111111-1111-4111-8111-111111111111' },
-  instructor: { id_number: '2023018092', id: '22222222-2222-4222-8222-222222222222' },
-  admin: { id_number: '2023018091', id: '33333333-3333-4333-8333-333333333333' },
+  student:    { id_number: '2023018093', email: 'chad.student@origintrace.test',        id: '11111111-1111-4111-8111-111111111111' },
+  instructor: { id_number: '2023018092', email: 'angeline.instructor@origintrace.test', id: '22222222-2222-4222-8222-222222222222' },
+  admin:      { id_number: '2023018091', email: 'jorge.admin@origintrace.test',         id: '33333333-3333-4333-8333-333333333333' },
 };
 const PASSWORD = 'Passw0rd!';
 
@@ -27,23 +27,24 @@ after(async () => {
   if (pool) await pool.end();
 });
 
-const login = (id_number, password) =>
-  request(app).post('/api/auth/login').send({ id_number, password });
+const login = (idNumber, password) =>
+  request(app).post('/api/auth/login').send({ idNumber, password });
 
 async function tokenFor(role) {
-  const response = await login(SEED[role].email, PASSWORD);
+  const response = await login(SEED[role].id_number, PASSWORD);
   assert.equal(response.status, 200, `could not log in as ${role}: are the seeds loaded?`);
   return response.body.token;
 }
 
 test('login with correct credentials returns a token and the public user', { skip }, async () => {
-  const response = await login(SEED.instructor.email, PASSWORD);
+  const response = await login(SEED.instructor.id_number, PASSWORD);
   assert.equal(response.status, 200);
   assert.deepEqual(Object.keys(response.body).sort(), ['token', 'user']);
   assert.equal(typeof response.body.token, 'string');
   assert.equal(response.body.token.split('.').length, 3, 'token is not a JWT');
   assert.deepEqual(response.body.user, {
     id: SEED.instructor.id,
+    id_number: SEED.instructor.id_number,
     email: SEED.instructor.email,
     role: 'instructor',
     full_name: 'Angeline Instructor',
@@ -51,7 +52,7 @@ test('login with correct credentials returns a token and the public user', { ski
 });
 
 test('login never leaks password_hash, in any casing', { skip }, async () => {
-  const response = await login(SEED.student.email, PASSWORD);
+  const response = await login(SEED.student.id_number, PASSWORD);
   assert.equal(response.status, 200);
   const serialised = JSON.stringify(response.body);
   assert.ok(!('password_hash' in response.body.user), 'password_hash present on user');
@@ -59,34 +60,32 @@ test('login never leaks password_hash, in any casing', { skip }, async () => {
   assert.ok(!/password/i.test(Object.keys(response.body.user).join(' ')));
 });
 
-test('login normalises the submitted email (lowercased and trimmed)', { skip }, async () => {
-  const response = await login(`  ${SEED.admin.email.toUpperCase()}  `, PASSWORD);
+test('login trims whitespace around the ID number', { skip }, async () => {
+  const response = await login(`  ${SEED.admin.id_number}  `, PASSWORD);
   assert.equal(response.status, 200);
   assert.equal(response.body.user.id, SEED.admin.id);
 });
 
 test('login with the wrong password is 401 and reveals nothing', { skip }, async () => {
-  const response = await login(SEED.student.email, 'not-the-password');
+  const response = await login(SEED.student.id_number, 'not-the-password');
   assert.equal(response.status, 401);
   assert.deepEqual(response.body, { error: 'Invalid credentials' });
 });
 
-test('login with an unknown email is 401, identical to a wrong password', { skip }, async () => {
-  const response = await login('nobody@origintrace.test', PASSWORD);
+test('login with an unknown ID number is 401, identical to a wrong password', { skip }, async () => {
+  const response = await login('0000000000', PASSWORD);
   assert.equal(response.status, 401);
   assert.deepEqual(response.body, { error: 'Invalid credentials' });
 });
 
 test('login with missing fields is 400', { skip }, async () => {
-  for (const body of [{}, { email: SEED.student.email }, { password: PASSWORD }, { email: '', password: '' }]) {
-    const response = await request(app).post('/api/auth/login').send(body);
+  for (const body of [{}, { idNumber: SEED.student.id_number }, { password: PASSWORD }, { idNumber: '', password: '' }]) {    const response = await request(app).post('/api/auth/login').send(body);
     assert.equal(response.status, 400, `body ${JSON.stringify(body)} was not a 400`);
-    assert.deepEqual(response.body, { error: 'Email and password are required' });
-  }
+    assert.deepEqual(response.body, { error: 'ID number and password are required' });  }
 });
 
 test('GET /api/me returns the same user the token was issued for', { skip }, async () => {
-  const response = await login(SEED.student.email, PASSWORD);
+  const response = await login(SEED.student.id_number, PASSWORD);
   const me = await request(app).get('/api/me').set('Authorization', `Bearer ${response.body.token}`);
   assert.equal(me.status, 200);
   assert.deepEqual(me.body, { user: response.body.user });
@@ -134,9 +133,9 @@ test('every status code documented in 0.5_api_contract.yaml is reachable', { ski
   const student = await tokenFor('student');
   const cases = [
     ['GET  /health 200', () => request(app).get('/api/health'), 200],
-    ['POST /auth/login 200', () => login(SEED.student.email, PASSWORD), 200],
+    ['POST /auth/login 200', () => login(SEED.student.id_number, PASSWORD), 200],
     ['POST /auth/login 400', () => request(app).post('/api/auth/login').send({}), 400],
-    ['POST /auth/login 401', () => login(SEED.student.email, 'wrong'), 401],
+    ['POST /auth/login 401', () => login(SEED.student.id_number, 'wrong'), 401],
     ['GET  /me 200', () => request(app).get('/api/me').set('Authorization', `Bearer ${student}`), 200],
     ['GET  /me 401', () => request(app).get('/api/me'), 401],
     ['GET  /instructor/submissions 200', () => request(app).get('/api/instructor/submissions').set('Authorization', `Bearer ${instructor}`), 200],
