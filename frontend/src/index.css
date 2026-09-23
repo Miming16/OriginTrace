@@ -390,6 +390,88 @@ button {
   font-weight: 800;
 }
 
+.student-dashboard-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.student-dashboard-card {
+  min-height: 114px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 18px 24px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.student-card-label,
+.student-card-meta {
+  color: #8296b5;
+  font-size: 0.76rem;
+}
+
+.student-dashboard-card strong {
+  margin-top: 3px;
+  color: #050505;
+  font-size: 1.35rem;
+  line-height: 1.2;
+}
+
+.dashboard-history-link {
+  width: fit-content;
+  margin-top: 3px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--brand-strong);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.student-risk-value {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #16b957 !important;
+}
+
+.student-risk-value i {
+  width: 19px;
+  height: 19px;
+  display: inline-block;
+  border-radius: 50%;
+}
+
+.recent-self-checks-panel { padding: 24px; }
+.recent-self-checks-title { margin-bottom: 12px; }
+.recent-self-checks-title h3 { margin: 0; font-size: 0.9rem; }
+.recent-self-checks-list { display: grid; }
+
+.recent-self-check-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 90px 130px;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  padding: 12px 0;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: var(--primary);
+  text-align: left;
+}
+
+.recent-self-check-row:last-child { border-bottom: 0; }
+.recent-self-check-row:hover { background: #f8fbff; }
+.recent-self-check-row strong { font-size: 0.78rem; }
+.recent-self-check-row .risk-low { color: #16b957; }
+.recent-self-check-row .risk-medium { color: #f59e0b; }
+.recent-self-check-row time { color: #8296b5; font-size: 0.78rem; text-align: right; }
+
 .panel {
   background: var(--panel);
   border: 1px solid var(--line);
@@ -1693,6 +1775,7 @@ button {
 
 @media (max-width: 960px) {
   .stats-grid,
+  .student-dashboard-stats,
   .detail-grid,
   .profile-layout,
   .profile-settings-top,
@@ -1788,6 +1871,7 @@ button {
   }
 
   .stats-grid,
+  .student-dashboard-stats,
   .detail-grid,
   .profile-layout,
   .submission-panel-grid,

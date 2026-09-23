@@ -32,6 +32,7 @@ export default function StudentSelfCheck() {
   const [loadingSubjects, setLoadingSubjects] = useState(true);
   const [gitHubConnected, setGitHubConnected] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isCourseMenuOpen, setIsCourseMenuOpen] = useState(false);
 
   const selectedSubject = subjects.find((subject) => subject.id === selectedSubjectId);
   const remainingChecks = useMemo(() => 3 - (result?.checksUsed || 0), [result]);
@@ -94,44 +95,46 @@ export default function StudentSelfCheck() {
   ];
 
   function renderDashboard() {
+    const lastSubmission = STUDENT_HISTORY[0];
+    const currentRisk = RISK_META[lastSubmission.band];
+
     return (
       <>
-        <div className="stats-grid">
-          {studentStats.map((stat) => (
-            <div key={stat.label} className="stat-card">
-              <div className="stat-topline">
-                <span className="material-symbols-outlined">{stat.icon}</span>
-                <span>{stat.label}</span>
-              </div>
-              <h3>{stat.value}</h3>
-            </div>
-          ))}
+        <div className="student-dashboard-stats">
+          <div className="student-dashboard-card">
+            <span className="student-card-label">Self-Checks Run</span>
+            <strong>12</strong>
+            <button type="button" className="dashboard-history-link" onClick={() => setActiveView('history')}>View history →</button>
+          </div>
+          <div className="student-dashboard-card">
+            <span className="student-card-label">Last Submission</span>
+            <strong>{lastSubmission.title}</strong>
+            <span className="student-card-meta">2 hours ago</span>
+          </div>
+          <div className="student-dashboard-card">
+            <span className="student-card-label">Current Risk Band</span>
+            <strong className="student-risk-value"><i style={{ background: currentRisk.bar }} />{currentRisk.badge}</strong>
+            <span className="student-card-meta">No flags detected</span>
+          </div>
+          <div className="student-dashboard-card">
+            <span className="student-card-label">Device</span>
+            <strong>PC-001</strong>
+            <span className="student-card-meta">MAC: 00:1A:2B:3C:4D:5E</span>
+          </div>
         </div>
 
-        <div className="panel">
-          <div className="panel-header">
-            <h3>Submission health</h3>
+        <div className="panel recent-self-checks-panel">
+          <div className="recent-self-checks-title">
+            <h3><span className="material-symbols-outlined">assignment</span> Recent Self-Checks</h3>
           </div>
-          <div className="submission-panel-grid">
-            <div className="chart-card">
-              <div className="mini-chart">
-                <span style={{ height: '48%' }} />
-                <span style={{ height: '74%' }} />
-                <span style={{ height: '62%' }} />
-                <span style={{ height: '90%' }} />
-                <span style={{ height: '68%' }} />
-                <span style={{ height: '100%' }} />
-              </div>
-            </div>
-            <div className="meta-card">
-              <h4>Development plausibility</h4>
-              <p>Most recent checks show steady commit growth with no undeclared device jumps.</p>
-              <ul>
-                <li>8 commits over 4 days</li>
-                <li>Author-committer match: 100%</li>
-                <li>No force-push detected</li>
-              </ul>
-            </div>
+          <div className="recent-self-checks-list">
+            {STUDENT_HISTORY.map((entry) => (
+              <button key={entry.id} type="button" className="recent-self-check-row" onClick={() => setActiveView('history')}>
+                <span>{entry.title}</span>
+                <strong className={RISK_META[entry.band].cls}>{RISK_META[entry.band].badge}</strong>
+                <time>{entry.date}</time>
+              </button>
+            ))}
           </div>
         </div>
       </>
@@ -255,7 +258,14 @@ export default function StudentSelfCheck() {
             <button
               key={item.key}
               className={activeView === item.key ? 'nav-item active' : 'nav-item'}
-              onClick={() => setActiveView(item.key)}
+              onClick={() => {
+                setActiveView(item.key);
+                if (item.key === 'courses') {
+                  setIsCourseMenuOpen((value) => !value);
+                } else {
+                  setIsCourseMenuOpen(false);
+                }
+              }}
             >
               <span className="material-symbols-outlined">{item.icon}</span>
               <span>{item.label}</span>
@@ -268,6 +278,34 @@ export default function StudentSelfCheck() {
           <button className="logout-link" onClick={logout}>Logout</button>
         </div>
       </aside>
+
+      {activeView === 'courses' && isCourseMenuOpen && (
+        <aside className="course-menu-panel">
+          <div className="course-menu-header">
+            <span className="muted">Student workspace</span>
+            <h3>My courses</h3>
+          </div>
+          {subjects.length === 0 ? (
+            <p className="empty-state">No courses are assigned yet.</p>
+          ) : (
+            <nav className="assigned-course-list" aria-label="My courses">
+              {subjects.map((subject) => (
+                <button
+                  type="button"
+                  key={subject.id}
+                  className={selectedSubjectId === subject.id ? 'assigned-course active' : 'assigned-course'}
+                  onClick={() => {
+                    setSelectedSubjectId(subject.id);
+                  }}
+                >
+                  <strong>{subject.subject_code}</strong>
+                  <span>{subject.subject_title}</span>
+                </button>
+              ))}
+            </nav>
+          )}
+        </aside>
+      )}
 
       <main className="main-shell">
         <header className="topbar">
@@ -283,58 +321,6 @@ export default function StudentSelfCheck() {
           {activeView === 'courses' && renderCourses()}
           {activeView === 'history' && renderHistory()}
           {activeView === 'profile' && renderProfile()}
-
-          <div className="panel self-check-panel">
-            <div className="panel-header">
-              <h3>Self-check submission</h3>
-              <span className="muted">{Math.max(0, 3 - (result?.checksUsed || 0))} of 3 remaining</span>
-            </div>
-
-            <form onSubmit={runSelfCheck} className="self-check-form">
-              <label>Subject</label>
-              <select
-                value={selectedSubjectId}
-                onChange={(e) => setSelectedSubjectId(e.target.value)}
-                disabled={loadingSubjects || result?.checking || subjects.length === 0}
-                required
-              >
-                <option value="">Select a subject</option>
-                {subjects.map((subject) => (
-                  <option key={subject.id} value={subject.id}>
-                    {subject.subject_code} - {subject.subject_title}{subject.is_open ? '' : ' (Closed)'}
-                  </option>
-                ))}
-              </select>
-              <label>Git repository</label>
-              <input value={repoUrl} onChange={(e) => setRepoUrl(e.target.value)} placeholder="https://github.com/your-org/project" disabled={Boolean(selectedFile)} />
-              <div className="or-divider">or</div>
-              <label className="upload-box">
-                <input type="file" onChange={(e) => setSelectedFile(e.target.files[0] || null)} disabled={Boolean(repoUrl)} />
-                <span>Drop file / browse to upload</span>
-              </label>
-              <button type="submit" className="primary-button" disabled={result?.checking || loadingSubjects || !selectedSubject?.is_open}>
-                {result?.checking ? 'Analyzing…' : selectedSubject && !selectedSubject.is_open ? 'Subject closed' : 'Run self-check'}
-              </button>
-            </form>
-
-            <div className="result-box">
-              {!result ? (
-                <p>No submission yet.</p>
-              ) : result.checking ? (
-                <p>Processing your repository...</p>
-              ) : result.error ? (
-                <p>{result.error}</p>
-              ) : (
-                <>
-                  <span className={`risk-badge ${RISK_META[result.band].cls}`}>{RISK_META[result.band].badge}</span>
-                  <p className="result-copy">
-                    This aggregate band is derived from structure, commit history, and provenance signals.
-                    Soft flags are surfaced to students, while faculty decisions remain human-reviewed.
-                  </p>
-                </>
-              )}
-            </div>
-          </div>
         </div>
       </main>
     </div>
