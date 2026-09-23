@@ -133,20 +133,20 @@ button {
 }
 
 .sidebar {
-  width: 250px;
+  width: 216px;
   background: #f8fbff;
   border-right: 1px solid var(--line);
-  padding: 24px 14px 18px;
+  padding: 20px 12px 16px;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 14px;
   transition: width 0.2s ease;
 }
 
 .course-menu-panel {
-  width: 250px;
-  flex: 0 0 250px;
-  padding: 24px 14px 18px;
+  width: 216px;
+  flex: 0 0 216px;
+  padding: 20px 12px 16px;
   background: #f8fbff;
   border-right: 1px solid var(--line);
 }
@@ -356,7 +356,7 @@ button {
 .student-self-check-result p { margin: 0; }
 
 .app-layout.sidebar-collapsed .sidebar {
-  width: 92px;
+  width: 76px;
 }
 
 .app-layout.sidebar-collapsed .brand-text,
@@ -394,7 +394,7 @@ button {
   align-items: center;
   gap: 10px;
   width: 100%;
-  padding: 8px 10px 16px;
+  padding: 0 10px 10px;
   border: none;
   background: transparent;
   color: var(--primary);
@@ -404,20 +404,20 @@ button {
 
 .brand-text {
   font-weight: 800;
-  font-size: 1.2rem;
+  font-size: 1.05rem;
   white-space: nowrap;
 }
 
 .nav-group {
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .nav-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 14px;
+  gap: 10px;
+  padding: 11px 12px;
   border: none;
   background: transparent;
   border-radius: 12px;
@@ -442,7 +442,7 @@ button {
 .sidebar-footer {
   margin-top: auto;
   border-top: 1px solid var(--line);
-  padding-top: 18px;
+  padding-top: 14px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -477,7 +477,8 @@ button {
 
 .topbar h2 {
   margin: 0;
-  font-size: 2rem;
+  font-size: 1.75rem;
+  line-height: 1.15;
   font-weight: 700;
 }
 
