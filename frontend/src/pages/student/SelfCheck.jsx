@@ -3,9 +3,9 @@ import { useAuth } from '../../context/AuthContext';
 import api, { analysisApi } from '../../api/axios';
 
 const STUDENT_HISTORY = [
-  { id: 'cs302-p2', title: 'CS302 · Project 2', date: 'Today 10:30', device: 'PC-001', band: 'low', integrity: 94, structural: 9, byline: 'Python' },
-  { id: 'cs101-lab5', title: 'CS101 · Lab 5', date: 'Yesterday 14:15', device: 'LAP-042', band: 'low', integrity: 96, structural: 6, byline: 'Python' },
-  { id: 'cs205-a3', title: 'CS205 · Assignment 3', date: '2 days ago', device: 'PC-001', band: 'medium', integrity: 74, structural: 52, byline: 'JavaScript' },
+  { id: 'cs302-p2', course: 'CS302', title: 'CS302 · Project 2', date: 'Today 10:30', device: 'PC-001', band: 'low', integrity: 94, structural: 9, byline: 'Python' },
+  { id: 'cs101-lab5', course: 'CS101', title: 'CS101 · Lab 5', date: 'Yesterday 14:15', device: 'LAP-042', band: 'low', integrity: 96, structural: 6, byline: 'Python' },
+  { id: 'cs205-a3', course: 'CS205', title: 'CS205 · Assignment 3', date: '2 days ago', device: 'PC-001', band: 'medium', integrity: 74, structural: 52, byline: 'JavaScript' },
 ];
 
 const COURSE_ASSIGNMENTS = [
@@ -40,6 +40,8 @@ export default function StudentSelfCheck() {
   const [isCourseMenuOpen, setIsCourseMenuOpen] = useState(false);
   const [selectedAssignment, setSelectedAssignment] = useState(null);
   const [showSelfCheckForm, setShowSelfCheckForm] = useState(false);
+  const [historyCourseFilter, setHistoryCourseFilter] = useState('all');
+  const [selectedHistoryEntry, setSelectedHistoryEntry] = useState(null);
 
   const selectedSubject = subjects.find((subject) => subject.id === selectedSubjectId);
   const remainingChecks = useMemo(() => 3 - (result?.checksUsed || 0), [result]);
@@ -334,14 +336,31 @@ export default function StudentSelfCheck() {
   }
 
   function renderHistory() {
+    if (selectedHistoryEntry) {
+      return renderHistoryDetail(selectedHistoryEntry);
+    }
+
+    const visibleHistory = STUDENT_HISTORY.filter((entry) => (
+      historyCourseFilter === 'all' || entry.course === historyCourseFilter
+    ));
+
     return (
       <div className="panel">
         <div className="panel-header">
           <h3>History</h3>
+          <div className="history-filter">
+            <label htmlFor="history-course-filter">Course</label>
+            <select id="history-course-filter" value={historyCourseFilter} onChange={(event) => setHistoryCourseFilter(event.target.value)}>
+              <option value="all">All courses</option>
+              {[...new Set(STUDENT_HISTORY.map((entry) => entry.course))].map((course) => (
+                <option key={course} value={course}>{course}</option>
+              ))}
+            </select>
+          </div>
         </div>
 
         <div className="history-list">
-          {STUDENT_HISTORY.map((entry) => (
+          {visibleHistory.map((entry) => (
             <div key={entry.id} className="history-item">
               <div>
                 <h4>{entry.title}</h4>
@@ -349,10 +368,95 @@ export default function StudentSelfCheck() {
               </div>
               <div className="history-meta">
                 <span className={`risk-badge ${RISK_META[entry.band].cls}`}>{RISK_META[entry.band].badge}</span>
-                <button className="ghost-button" onClick={() => setResult({ checking: false, band: entry.band, checksUsed: 1 })}>View</button>
+                <button type="button" className="ghost-button" onClick={() => setSelectedHistoryEntry(entry)}>View</button>
               </div>
             </div>
           ))}
+          {visibleHistory.length === 0 && <p className="empty-state">No history found for this course.</p>}
+        </div>
+      </div>
+    );
+  }
+
+  function renderHistoryDetail(entry) {
+    const isMedium = entry.band === 'medium';
+    const integrity = isMedium ? 74 : entry.integrity;
+    const structural = isMedium ? 52 : entry.structural;
+    const deduction = 100 - integrity;
+    const risk = RISK_META[entry.band];
+
+    return (
+      <div className="student-assignment-detail">
+        <button type="button" className="back-link student-detail-back" onClick={() => setSelectedHistoryEntry(null)}>
+          <span className="material-symbols-outlined">arrow_back</span>
+          Back to History
+        </button>
+
+        <section className="panel assignment-detail-hero">
+          <div>
+            <h3>{entry.title}</h3>
+            <div className="assignment-detail-meta">
+              <span>{entry.byline}</span><span>{entry.device}</span><span>Checked {entry.date}</span>
+            </div>
+          </div>
+          <span className={`assignment-detail-risk ${isMedium ? 'medium-risk' : ''}`}><i style={{ background: risk.bar }} />{risk.badge}</span>
+        </section>
+
+        <div className="assignment-detail-stats">
+          <div className="panel assignment-stat-card">
+            <span>Integrity score</span>
+            <strong className={isMedium ? 'medium-value' : ''}>{integrity}%</strong>
+            <div className="integrity-bar"><i className={isMedium ? 'medium-bar' : ''} style={{ width: `${integrity}%` }} /></div>
+          </div>
+          <div className="panel assignment-stat-card">
+            <span>Structural score</span>
+            <strong>{structural}%</strong>
+            <small>Aggregate — no peer details</small>
+          </div>
+          <div className="panel assignment-stat-card">
+            <span>Commit health</span>
+            <strong>{isMedium ? 'Variable' : 'Healthy'}</strong>
+            <small>{isMedium ? '8 commits · 2 days' : '9 commits · 3 days'}</small>
+          </div>
+          <div className="panel assignment-stat-card">
+            <span>Flags</span>
+            <strong className={isMedium ? 'medium-value' : ''}>{isMedium ? '1' : '0'}</strong>
+            <small>{isMedium ? 'Advisory only' : 'All clear'}</small>
+          </div>
+        </div>
+
+        <section className="panel score-calculation-panel">
+          <h3><span className="material-symbols-outlined">calculate</span> How your {integrity}% is calculated</h3>
+          <p>Each detected signal deducts weighted points from a base score of 100. The deductions are added together and the total is converted into your integrity percentage.</p>
+          <div className="score-table">
+            <div><strong>Base score</strong><strong>100</strong></div>
+            {isMedium ? (
+              <>
+                <div><span>Structural similarity above threshold (52%)</span><b className="medium-value">−16</b></div>
+                <div><span>Low entropy commit messages</span><b className="medium-value">−6</b></div>
+                <div><span>Activity burst before deadline</span><b className="medium-value">−4</b></div>
+              </>
+            ) : (
+              <div><span>Minor structural echoes ({structural}% match)</span><b>−{deduction}</b></div>
+            )}
+            <div><strong>Total deductions</strong><strong className={isMedium ? 'medium-value' : ''}>−{deduction}</strong></div>
+          </div>
+          <strong>Integrity score = 100 − {deduction} = <em className={isMedium ? 'medium-value' : ''}>{integrity}%</em></strong>
+        </section>
+
+        <div className="assignment-detail-bottom">
+          <section className="panel detail-info-panel">
+            <h3 className={isMedium ? 'medium-heading' : ''}><span className="material-symbols-outlined">flag</span> Flags</h3>
+            {isMedium ? (
+              <div className="warning-flag">▲ Low entropy commit messages — 3 commits with vague descriptions (“fix”, “update”)</div>
+            ) : (
+              <div className="clear-flag"><span>✓</span> No flags detected</div>
+            )}
+          </section>
+          <section className="panel detail-info-panel">
+            <h3><span className="material-symbols-outlined">commit</span> Commit Summary</h3>
+            <div className="commit-summary">• {isMedium ? '8 commits over 2 days' : '9 commits over 3 days'}<br />{isMedium && '• 1 burst of activity detected'}{isMedium && <br />}• No force-push detected<br />• Author-committer match: 100%</div>
+          </section>
         </div>
       </div>
     );

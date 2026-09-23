@@ -305,14 +305,17 @@ button {
 .assignment-detail-meta span { padding: 3px 8px; border-radius: 4px; background: #e8edf2; }
 .assignment-detail-risk { display: inline-flex; align-items: center; gap: 7px; padding: 5px 13px; border-radius: 999px; background: #dcf8e8; color: #11a84c; font-size: 0.75rem; font-weight: 800; }
 .assignment-detail-risk i { width: 12px; height: 12px; border-radius: 50%; }
+.assignment-detail-risk.medium-risk { background: #fff0d8; color: #d98600; }
 .assignment-detail-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; }
 .assignment-stat-card { display: grid; gap: 6px; min-height: 101px; padding: 18px; }
 .assignment-stat-card > span { color: #8296b5; font-size: 0.7rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
 .assignment-stat-card strong { font-size: 1.45rem; }
 .assignment-stat-card:first-child strong, .assignment-stat-card:last-child strong { color: #16b957; }
+.assignment-stat-card strong.medium-value, .medium-value { color: #f59e0b !important; }
 .assignment-stat-card small { color: #8296b5; font-size: 0.7rem; }
 .integrity-bar { height: 7px; overflow: hidden; border-radius: 6px; background: #e9eef3; }
 .integrity-bar i { display: block; height: 100%; background: #18bd5b; }
+.integrity-bar i.medium-bar { background: #f59e0b; }
 .score-calculation-panel h3, .detail-info-panel h3, .guidance-panel h3 { display: flex; align-items: center; gap: 7px; margin: 0 0 6px; font-size: 0.82rem; }
 .score-calculation-panel h3 .material-symbols-outlined, .detail-info-panel h3 .material-symbols-outlined, .guidance-panel h3 .material-symbols-outlined { color: var(--brand-strong); font-size: 17px; }
 .score-calculation-panel > p { margin: 0 0 10px; color: #8296b5; font-size: 0.7rem; }
@@ -325,8 +328,10 @@ button {
 .assignment-detail-bottom { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
 .detail-info-panel { min-height: 140px; }
 .detail-info-panel h3 .material-symbols-outlined { color: #16b957; }
+.detail-info-panel h3.medium-heading .material-symbols-outlined { color: #f59e0b; }
 .clear-flag { margin-top: 12px; padding: 8px 10px; border: 1px solid #a9f2c5; border-radius: 10px; background: #effdf4; color: #278b51; font-size: 0.72rem; }
 .clear-flag span { margin-right: 6px; }
+.warning-flag { margin-top: 12px; padding: 8px 10px; border: 1px solid #ffd77e; border-radius: 10px; background: #fff9e9; color: #b26c11; font-size: 0.72rem; }
 .commit-summary { margin-top: 12px; padding: 11px 13px; border-radius: 11px; background: #eef3f8; color: #8296b5; font-size: 0.72rem; line-height: 1.55; }
 .guidance-panel { min-height: 92px; }
 .guidance-panel h3 .material-symbols-outlined { color: var(--brand-strong); }
@@ -1365,6 +1370,29 @@ button {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.history-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.history-filter label {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.history-filter select {
+  min-width: 150px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 8px 10px;
+  background: white;
+  color: var(--primary);
+  font: inherit;
+  font-size: 0.75rem;
 }
 
 .profile-layout {
