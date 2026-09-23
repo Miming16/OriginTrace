@@ -140,7 +140,15 @@ export default function StudentSelfCheck() {
           </div>
           <div className="recent-self-checks-list">
             {STUDENT_HISTORY.map((entry) => (
-              <button key={entry.id} type="button" className="recent-self-check-row" onClick={() => setActiveView('history')}>
+              <button
+                key={entry.id}
+                type="button"
+                className="recent-self-check-row"
+                onClick={() => {
+                  setSelectedHistoryEntry(entry);
+                  setActiveView('history');
+                }}
+              >
                 <span>{entry.title}</span>
                 <strong className={RISK_META[entry.band].cls}>{RISK_META[entry.band].badge}</strong>
                 <time>{entry.date}</time>
