@@ -9,10 +9,15 @@ const STUDENT_HISTORY = [
 ];
 
 const COURSE_ASSIGNMENTS = [
-  { id: 'a1', name: 'Lab 4: Control Flow', band: 'low', status: 'checked', resultId: 'cs101-lab5', repo: 'cs101-labs', submitted: true },
-  { id: 'a2', name: 'Portfolio Website', band: 'medium', status: 'checked', resultId: 'cs205-a3', repo: 'web-assign', submitted: true },
-  { id: 'a3', name: 'Project 2', band: 'low', status: 'pending', resultId: null, repo: '', submitted: false },
-  { id: 'a4', name: 'Final Reflection', band: null, status: 'pending', resultId: null, repo: '', submitted: false },
+  { id: 'a1', name: 'Lab 4 — Loops & Functions', detailName: 'Lab 4', due: 'Jun 20', band: 'low', status: 'checked', statusLabel: 'Submitted', action: 'checked', integrity: 96, structural: 6, device: 'LAP-042', checkedAt: 'Yesterday 14:15' },
+  { id: 'a2', name: 'Lab 5 — File Handling', detailName: 'Lab 5', due: 'Jun 28', band: 'low', status: 'submitted', statusLabel: 'Submitted', action: 'result', integrity: 96, structural: 6, device: 'LAP-042', checkedAt: 'Yesterday 14:15' },
+  { id: 'a3', name: 'Lab 6 — Dictionaries', detailName: 'Lab 6', due: 'Jul 12', band: null, status: 'pending', statusLabel: 'Not submitted', action: 'self-check', integrity: 0, structural: 0, device: 'LAP-042', checkedAt: 'Not checked' },
+];
+
+const DEFAULT_STUDENT_SUBJECTS = [
+  { id: 'cs101', subject_code: 'CS101', subject_title: 'Introduction to Programming', is_open: true },
+  { id: 'cs205', subject_code: 'CS205', subject_title: 'Web Development', is_open: true },
+  { id: 'cs302', subject_code: 'CS302', subject_title: 'Software Engineering', is_open: true },
 ];
 
 const RISK_META = {
@@ -33,6 +38,8 @@ export default function StudentSelfCheck() {
   const [gitHubConnected, setGitHubConnected] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isCourseMenuOpen, setIsCourseMenuOpen] = useState(false);
+  const [selectedAssignment, setSelectedAssignment] = useState(null);
+  const [showSelfCheckForm, setShowSelfCheckForm] = useState(false);
 
   const selectedSubject = subjects.find((subject) => subject.id === selectedSubjectId);
   const remainingChecks = useMemo(() => 3 - (result?.checksUsed || 0), [result]);
@@ -41,7 +48,9 @@ export default function StudentSelfCheck() {
     async function loadSubjects() {
       try {
         const response = await api.get('/student/subjects');
-        const availableSubjects = response.data.subjects || [];
+        const availableSubjects = response.data.subjects?.length
+          ? response.data.subjects
+          : DEFAULT_STUDENT_SUBJECTS;
         setSubjects(availableSubjects);
         setSelectedSubjectId(availableSubjects[0]?.id || '');
       } catch (error) {
@@ -142,40 +151,184 @@ export default function StudentSelfCheck() {
   }
 
   function renderCourses() {
+    const course = selectedSubject || DEFAULT_STUDENT_SUBJECTS[0];
+
+    if (showSelfCheckForm) {
+      return renderSelfCheckForm(course);
+    }
+
+    if (selectedAssignment) {
+      return renderAssignmentDetail(selectedAssignment, course);
+    }
+
     return (
-      <div className="panel">
-        <div className="panel-header">
-          <h3>My courses</h3>
+      <div className="panel student-course-detail">
+        <div className="student-course-detail-header">
+          <div>
+            <span className="student-course-eyebrow">Selected course</span>
+            <h3>{course.subject_code} · {course.subject_title}</h3>
+            <p>Prof. D. Ramos · Python fundamentals</p>
+          </div>
+          <button type="button" className="switch-course-button" onClick={() => {
+            setSelectedAssignment(null);
+            setIsCourseMenuOpen(true);
+          }}>
+            <span className="material-symbols-outlined">swap_horiz</span>
+            Switch Course
+          </button>
         </div>
 
-        <div className="course-selector-row">
-          {subjects.map((subject) => (
-            <button
-              key={subject.id}
-              className={selectedSubjectId === subject.id ? 'course-chip active' : 'course-chip'}
-              onClick={() => setSelectedSubjectId(subject.id)}
-            >
-              {subject.subject_code}
-            </button>
-          ))}
-        </div>
-
-        <div className="assignment-list">
+        <div className="student-assignment-section">
+          <div className="student-assignment-heading">
+            <strong>Assignments</strong>
+            <span>2 of 3 self-checked · 2 submitted</span>
+          </div>
           {COURSE_ASSIGNMENTS.map((assignment) => (
-            <div key={assignment.id} className="assignment-item">
-              <div>
-                <h4>{assignment.name}</h4>
-                <p>{assignment.repo ? `Repo: ${assignment.repo}` : 'No repository selected yet'}</p>
+            <button
+              key={assignment.id}
+              type="button"
+              className="student-assignment-row"
+              onClick={() => {
+                if (assignment.action === 'self-check') {
+                  setShowSelfCheckForm(true);
+                } else {
+                  setSelectedAssignment(assignment);
+                }
+              }}
+            >
+              <div className="student-assignment-copy">
+                <strong>{assignment.name}</strong>
+                <span>Due {assignment.due} · <b className={assignment.status === 'submitted' || assignment.status === 'checked' ? 'submitted' : ''}>{assignment.statusLabel}</b></span>
               </div>
-              <div className="assignment-actions">
+              <div className="student-assignment-actions">
                 <span className={assignment.band ? `risk-badge ${RISK_META[assignment.band].cls}` : 'risk-badge neutral'}>
                   {assignment.band ? RISK_META[assignment.band].badge : 'Not checked'}
                 </span>
-                <button className="ghost-button" onClick={() => setActiveView('dashboard')}>Open</button>
+                {assignment.action === 'checked' && <strong className="assignment-checked">✓ Checked</strong>}
+                {assignment.action === 'result' && <span className="assignment-result-button">View result →</span>}
+                {assignment.action === 'self-check' && <span className="run-self-check-button">Run Self-Check</span>}
               </div>
-            </div>
+            </button>
           ))}
         </div>
+        <p className="student-course-note">Run a self-check on each assignment before submitting. Press Courses in the sidebar (or Switch Course above) to open the course list.</p>
+      </div>
+    );
+  }
+
+  function renderSelfCheckForm(course) {
+    return (
+      <div className="panel student-self-check-page">
+        <div className="student-self-check-header">
+          <button type="button" className="back-link" onClick={() => setShowSelfCheckForm(false)}>
+            <span className="material-symbols-outlined">arrow_back</span>
+            Back to {course.subject_code}
+          </button>
+          <span className="student-self-check-remaining">{Math.max(0, 3 - (result?.checksUsed || 0))} of 3 remaining</span>
+        </div>
+        <h3>Self-check submission</h3>
+
+        <form onSubmit={runSelfCheck} className="student-self-check-form">
+          <label htmlFor="self-check-repository">Git repository</label>
+          <input id="self-check-repository" value={repoUrl} onChange={(event) => setRepoUrl(event.target.value)} placeholder="https://github.com/your-org/project" disabled={Boolean(selectedFile)} />
+          <div className="student-self-check-or">or</div>
+          <label className="student-upload-box">
+            <input type="file" onChange={(event) => setSelectedFile(event.target.files[0] || null)} disabled={Boolean(repoUrl)} />
+            <span>Drop file / browse to upload</span>
+          </label>
+          <button type="submit" className="student-run-check-button" disabled={result?.checking || loadingSubjects || !selectedSubject?.is_open}>
+            {result?.checking ? 'Analyzing...' : 'Run self-check'}
+          </button>
+        </form>
+
+        <div className="student-self-check-result">
+          {!result ? (
+            <p>No submission yet.</p>
+          ) : result.checking ? (
+            <p>Processing your repository...</p>
+          ) : result.error ? (
+            <p>{result.error}</p>
+          ) : (
+            <>
+              <span className={`risk-badge ${RISK_META[result.band]?.cls || 'risk-low'}`}>{RISK_META[result.band]?.badge || 'Low'}</span>
+              <p>This aggregate band is derived from structure, commit history, and provenance signals.</p>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  function renderAssignmentDetail(assignment, course) {
+    const risk = assignment.band ? RISK_META[assignment.band] : RISK_META.low;
+    const deduction = Math.max(0, 100 - assignment.integrity);
+
+    return (
+      <div className="student-assignment-detail">
+        <button type="button" className="back-link student-detail-back" onClick={() => setSelectedAssignment(null)}>
+          <span className="material-symbols-outlined">arrow_back</span>
+          Back to {course.subject_code}
+        </button>
+
+        <section className="panel assignment-detail-hero">
+          <div>
+            <h3>{course.subject_code} · {assignment.detailName}</h3>
+            <div className="assignment-detail-meta">
+              <span>Python</span><span>{assignment.device}</span><span>Checked {assignment.checkedAt}</span>
+            </div>
+          </div>
+          <span className="assignment-detail-risk"><i style={{ background: risk.bar }} />{risk.badge}</span>
+        </section>
+
+        <div className="assignment-detail-stats">
+          <div className="panel assignment-stat-card">
+            <span>Integrity score</span>
+            <strong>{assignment.integrity}%</strong>
+            <div className="integrity-bar"><i style={{ width: `${assignment.integrity}%` }} /></div>
+          </div>
+          <div className="panel assignment-stat-card">
+            <span>Structural score</span>
+            <strong>{assignment.structural}%</strong>
+            <small>Aggregate — no peer details</small>
+          </div>
+          <div className="panel assignment-stat-card">
+            <span>Commit health</span>
+            <strong>Healthy</strong>
+            <small>9 commits · 3 days</small>
+          </div>
+          <div className="panel assignment-stat-card">
+            <span>Flags</span>
+            <strong>0</strong>
+            <small>All clear</small>
+          </div>
+        </div>
+
+        <section className="panel score-calculation-panel">
+          <h3><span className="material-symbols-outlined">calculate</span> How your {assignment.integrity}% is calculated</h3>
+          <p>Each detected signal deducts weighted points from a base score of 100. The deductions are added together and the total is converted into your integrity percentage.</p>
+          <div className="score-table">
+            <div><strong>Base score</strong><strong>100</strong></div>
+            <div><span>Minor structural echoes ({assignment.structural}% match)</span><b>-{deduction}</b></div>
+            <div><strong>Total deductions</strong><strong>-{deduction}</strong></div>
+          </div>
+          <strong>Integrity score = 100 − {deduction} = <em>{assignment.integrity}%</em></strong>
+        </section>
+
+        <div className="assignment-detail-bottom">
+          <section className="panel detail-info-panel">
+            <h3><span className="material-symbols-outlined">flag</span> Flags</h3>
+            <div className="clear-flag"><span>✓</span> No flags detected</div>
+          </section>
+          <section className="panel detail-info-panel">
+            <h3><span className="material-symbols-outlined">commit</span> Commit Summary</h3>
+            <div className="commit-summary">• 9 commits over 3 days<br />• Descriptive commit messages<br />• No force-push detected<br />• Author-committer match: 100%</div>
+          </section>
+        </div>
+
+        <section className="panel guidance-panel">
+          <h3><span className="material-symbols-outlined">lightbulb</span> Guidance</h3>
+          <p>Clean result. No action needed.</p>
+        </section>
       </div>
     );
   }
@@ -280,22 +433,29 @@ export default function StudentSelfCheck() {
       </aside>
 
       {activeView === 'courses' && isCourseMenuOpen && (
-        <aside className="course-menu-panel">
-          <div className="course-menu-header">
-            <span className="muted">Student workspace</span>
-            <h3>My courses</h3>
+        <aside className="student-course-menu">
+          <div className="student-course-menu-header">
+            <div>
+              <h3>Courses</h3>
+              <p>Choose a course to open it</p>
+            </div>
+            <button type="button" className="student-course-menu-close" onClick={() => setIsCourseMenuOpen(false)} aria-label="Close courses menu">
+              <span className="material-symbols-outlined">close</span>
+            </button>
           </div>
           {subjects.length === 0 ? (
             <p className="empty-state">No courses are assigned yet.</p>
           ) : (
-            <nav className="assigned-course-list" aria-label="My courses">
+            <nav className="student-course-list" aria-label="My courses">
               {subjects.map((subject) => (
                 <button
                   type="button"
                   key={subject.id}
-                  className={selectedSubjectId === subject.id ? 'assigned-course active' : 'assigned-course'}
+                  className={selectedSubjectId === subject.id ? 'student-course-card active' : 'student-course-card'}
                   onClick={() => {
                     setSelectedSubjectId(subject.id);
+                    setSelectedAssignment(null);
+                    setIsCourseMenuOpen(false);
                   }}
                 >
                   <strong>{subject.subject_code}</strong>
