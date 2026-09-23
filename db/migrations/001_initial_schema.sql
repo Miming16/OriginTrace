@@ -67,7 +67,7 @@ CREATE TABLE commit_signals (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     submission_id   UUID NOT NULL REFERENCES submissions(id) ON DELETE CASCADE,
     signal_type     VARCHAR(50) NOT NULL
-                        CHECK (signal_type IN ('big_bang_commit', 'zombie_code', 'low_message_entropy')),
+                        CHECK (signal_type IN ('big_bang_commit', 'zombie_code', 'low_message_entropy', 'history_metrics')),
     severity        VARCHAR(10) NOT NULL CHECK (severity IN ('low', 'medium', 'high')),
     description     TEXT,
     detected_at     TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -84,6 +84,7 @@ CREATE TABLE provenance_flags (
     flag_type       VARCHAR(50) NOT NULL
                         CHECK (flag_type IN ('author_committer_mismatch', 'timestamp_anomaly', 'embedded_authorship_marker', 'orphan_commit')),
     severity        VARCHAR(10) NOT NULL CHECK (severity IN ('low', 'medium', 'high')),
+    flag_level      VARCHAR(10) NOT NULL CHECK (flag_level IN ('SOFT', 'HARD')),
     description     TEXT,
     detected_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );

@@ -83,7 +83,7 @@ def winnow(values: list[str], k: int = 5, window: int = 4) -> list[dict]:
     return [{"hash_value": value, "window_position": position} for position, value in selected.items()]
 
 
-def git_signals(root: Path, final_lines: int) -> tuple[list[dict], list[dict], dict]:
+def git_signals(root: Path, final_lines: int, enrolled_email: str | None = None) -> tuple[list[dict], list[dict], dict]:
     try:
         log = subprocess.run(
             ["git", "-C", str(root), "log", "--numstat", "--format=%H%x09%P%x09%aI%x09%an%x09%ae%x09%cn%x09%ce%x09%s", "-n", "50"],
@@ -116,7 +116,15 @@ def git_signals(root: Path, final_lines: int) -> tuple[list[dict], list[dict], d
     commit_count = len(commits)
     dates = [datetime.fromisoformat(commit["date"]) for commit in commits]
     timespan_days = (max(dates) - min(dates)).total_seconds() / 86400 if dates else 0
-    low_entropy_count = sum(len(commit["message"].split()) <= 2 for commit in commits)
+    message_counts = {}
+    for commit in commits:
+        normalized_message = " ".join(commit["message"].lower().split())
+        message_counts[normalized_message] = message_counts.get(normalized_message, 0) + 1
+    low_entropy_count = sum(
+        len(commit["message"].split()) <= 2
+        or message_counts[" ".join(commit["message"].lower().split())] > 1
+        for commit in commits
+    )
     matching_commits = sum(
         commit["author"] == commit["committer"] and commit["author_email"] == commit["committer_email"]
         for commit in commits
@@ -138,6 +146,8 @@ def git_signals(root: Path, final_lines: int) -> tuple[list[dict], list[dict], d
         signals.append({"signal_type": "low_message_entropy", "severity": "low", "description": "A high proportion of commit messages are unusually short."})
     if author_committer_match_pct < 100:
         provenance_flags.append({"flag_type": "author_committer_mismatch", "severity": "medium", "description": "At least one commit author differs from its committer."})
+    if enrolled_email and any(commit["author_email"].lower() != enrolled_email.lower() for commit in commits):
+        provenance_flags.append({"flag_type": "enrolled_email_mismatch", "severity": "medium", "description": "At least one commit author email does not match the enrolled student account."})
     timestamps = [commit["date"] for commit in commits]
     backwards = any(left < right for left, right in zip(timestamps, timestamps[1:]))
     identical = commit_count > 1 and len(set(timestamps)) == 1
@@ -146,10 +156,16 @@ def git_signals(root: Path, final_lines: int) -> tuple[list[dict], list[dict], d
         provenance_flags.append({"flag_type": "timestamp_anomaly", "severity": "high", "description": reason})
     if commit_count == 1 and not commits[0]["parents"]:
         provenance_flags.append({"flag_type": "orphan_commit", "severity": "high", "description": "Repository contains a single root commit with no development history."})
+    unreachable = subprocess.run(
+        ["git", "-C", str(root), "fsck", "--full", "--no-reflogs", "--unreachable"],
+        capture_output=True, text=True, timeout=10, check=False,
+    )
+    if any(line.startswith("unreachable commit ") for line in unreachable.stdout.splitlines()):
+        provenance_flags.append({"flag_type": "history_rewritten", "severity": "high", "description": "Git contains commits that are no longer reachable from the current history."})
     return signals, provenance_flags, metrics
 
 
-def analyze_directory(root: Path, language: str, overlap: float = 0.0) -> dict:
+def analyze_directory(root: Path, language: str, overlap: float = 0.0, enrolled_email: str | None = None) -> dict:
     language = validate_language(language)
     files = source_files(root, language)
     sources = {
@@ -164,18 +180,18 @@ def analyze_directory(root: Path, language: str, overlap: float = 0.0) -> dict:
         excluded += len(source.splitlines()) - len(filtered.splitlines())
         fingerprints.extend({"file_path": path.relative_to(root).as_posix(), **fingerprint} for fingerprint in winnow(normalized_ast(filtered, language)))
     final_lines = sum(len(source.splitlines()) for source in sources.values())
-    commit_flags, provenance_flags, commit_metrics = git_signals(root, final_lines)
+    commit_flags, provenance_flags, commit_metrics = git_signals(root, final_lines, enrolled_email)
     risk_band_value = risk_band(overlap, commit_flags, provenance_flags)
     return {"language": language, "files_included": len(files), "boilerplate_lines_excluded": excluded, "fingerprints": fingerprints, "commit_signals": commit_flags, "commit_metrics": commit_metrics, "provenance_flags": provenance_flags, "similarity_score": 0.0, "risk_band": risk_band_value}
 
 
-def analyze_git_url(url: str, language: str) -> dict:
+def analyze_git_url(url: str, language: str, enrolled_email: str | None = None) -> dict:
     with tempfile.TemporaryDirectory() as directory:
         target = Path(directory) / "repository"
-        result = subprocess.run(["git", "clone", "--depth", "50", "--", url, str(target)], capture_output=True, text=True, timeout=60, check=False)
+        result = subprocess.run(["git", "clone", "--", url, str(target)], capture_output=True, text=True, timeout=60, check=False)
         if result.returncode != 0:
             raise ValueError("Repository could not be cloned")
-        return analyze_directory(target, language)
+        return analyze_directory(target, language, enrolled_email=enrolled_email)
 
 def risk_band(overlap: float, commit_signals: list[dict], provenance_flags: list[dict]) -> str:
     """Overlap sets the band. Commit and provenance findings are soft flags:

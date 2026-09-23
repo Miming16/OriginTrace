@@ -124,8 +124,8 @@ export default function InstructorDashboard() {
 
     setUpdatingDecision(true);
     try {
-      const res = await api.patch(`/instructor/submissions/${selectedId}`, { status });
-      const updatedStatus = res.data?.status || status;
+      const res = await api.post(`/instructor/submissions/${selectedId}/decision`, { decision: status });
+      const updatedStatus = res.data?.decision?.decision || status;
 
       setSubmissions((prev) =>
         prev.map((sub) => (sub.id === selectedId ? { ...sub, status: updatedStatus } : sub))
@@ -138,10 +138,11 @@ export default function InstructorDashboard() {
   }
 
   const selected = submissions.find((s) => s.id === selectedId);
+  const commitMetrics = detailData?.commit_metrics || detailData?.commit_signals?.[0] || null;
 
-  const lowCount = submissions.filter((s) => s.risk === 'Low').length;
-  const mediumCount = submissions.filter((s) => s.risk === 'Medium').length;
-  const highCount = submissions.filter((s) => s.risk === 'High').length;
+  const lowCount = submissions.filter((s) => s.risk_band === 'LOW').length;
+  const mediumCount = submissions.filter((s) => s.risk_band === 'MEDIUM').length;
+  const highCount = submissions.filter((s) => s.risk_band === 'HIGH').length;
 
   const kpis = [
     { label: 'Total submissions', value: submissions.length, badge: 'dashboard' },
@@ -300,8 +301,8 @@ export default function InstructorDashboard() {
                         <div className="submission-row-meta">
                           {s.lang && <span className="lang-pill">{s.lang}</span>}
                           {s.flagsCount !== undefined && <span className="flag-pill">{s.flagsCount} flags</span>}
-                          <span className={`risk-badge ${RISK_META[s.risk]?.cls || 'risk-low'}`}>
-                            {s.risk}
+                          <span className={`risk-badge ${RISK_META[s.risk_band]?.cls || 'risk-low'}`}>
+                            {s.risk_band}
                           </span>
                         </div>
                       </div>
@@ -314,8 +315,8 @@ export default function InstructorDashboard() {
                 <div className="panel detail-panel">
                   <div className="panel-header">
                     <h3>{selected.student || selected.name || selected.studentName}</h3>
-                    <span className={`risk-badge ${RISK_META[selected.risk]?.cls || 'risk-low'}`}>
-                      {selected.risk}
+                    <span className={`risk-badge ${RISK_META[selected.risk_band]?.cls || 'risk-low'}`}>
+                      {selected.risk_band}
                     </span>
                   </div>
 
@@ -327,10 +328,10 @@ export default function InstructorDashboard() {
                         {/* 1. Risk Band */}
                         <div className="detail-box">
                           <h4>Risk band</h4>
-                          <span className={`risk-badge ${RISK_META[selected.risk]?.cls || 'risk-low'}`}>
-                            {selected.risk}
+                          <span className={`risk-badge ${RISK_META[selected.risk_band]?.cls || 'risk-low'}`}>
+                            {selected.risk_band}
                           </span>
-                          <p>{detailData?.riskDescription || `Assigned ${selected.risk} risk level.`}</p>
+                          <p>{detailData?.riskDescription || `Assigned ${selected.risk_band} risk level.`}</p>
                         </div>
 
                         <div className="detail-box">
@@ -349,16 +350,33 @@ export default function InstructorDashboard() {
                           </p>
                         </div>
 
+                        <div className="detail-box">
+                          <h4>Commit history</h4>
+                          {commitMetrics ? (
+                            <>
+                              <p>
+                                {commitMetrics.commit_count} commits over {commitMetrics.timespan_days} day(s).
+                              </p>
+                              <p>
+                                Big-bang: {commitMetrics.has_big_bang ? 'Yes' : 'No'} · Low-entropy messages: {commitMetrics.low_entropy_count}
+                              </p>
+                              <p>Author/committer match: {commitMetrics.author_committer_match_pct}%</p>
+                            </>
+                          ) : (
+                            <p>Commit metrics are not available for this submission.</p>
+                          )}
+                        </div>
+
                         <div className="detail-box emphasis">
                           <h4>Commit & Provenance flags</h4>
-                          {detailData?.flags && detailData.flags.length > 0 ? (
+                          {detailData?.provenance_flags && detailData.provenance_flags.length > 0 ? (
                             <ul className="flags-list">
-                              {detailData.flags.map((flag, idx) => (
+                              {detailData.provenance_flags.map((flag, idx) => (
                                 <li key={idx}>
-                                  <strong className={`flag-type ${flag.type === 'hard' ? 'hard-flag' : 'soft-flag'}`}>
-                                    {flag.type === 'hard' ? 'hard flag' : 'soft flag'}:
+                                  <strong className={`flag-type ${flag.flag_level === 'HARD' ? 'hard-flag' : 'soft-flag'}`}>
+                                    {flag.flag_level} flag:
                                   </strong>{' '}
-                                  {flag.message}
+                                  {flag.description}
                                 </li>
                               ))}
                             </ul>
@@ -377,7 +395,7 @@ export default function InstructorDashboard() {
                             type="button"
                             className="primary-button"
                             disabled={updatingDecision}
-                            onClick={() => handleDecision('Cleared')}
+                            onClick={() => handleDecision('cleared')}
                           >
                             Cleared
                           </button>
@@ -385,7 +403,7 @@ export default function InstructorDashboard() {
                             type="button"
                             className="secondary-button"
                             disabled={updatingDecision}
-                            onClick={() => handleDecision('Under review')}
+                            onClick={() => handleDecision('under_review')}
                           >
                             Under review
                           </button>
@@ -393,7 +411,7 @@ export default function InstructorDashboard() {
                             type="button"
                             className="danger-button"
                             disabled={updatingDecision}
-                            onClick={() => handleDecision('Flagged')}
+                            onClick={() => handleDecision('flagged')}
                           >
                             Flagged
                           </button>

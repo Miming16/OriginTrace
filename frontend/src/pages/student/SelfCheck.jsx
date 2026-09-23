@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import api, { analysisApi } from '../../api/axios';
 
@@ -42,9 +42,10 @@ export default function StudentSelfCheck() {
   const [showSelfCheckForm, setShowSelfCheckForm] = useState(false);
   const [historyCourseFilter, setHistoryCourseFilter] = useState('all');
   const [selectedHistoryEntry, setSelectedHistoryEntry] = useState(null);
+  const [quota, setQuota] = useState({ limit: 3, used: 0, remaining: 3 });
 
   const selectedSubject = subjects.find((subject) => subject.id === selectedSubjectId);
-  const remainingChecks = useMemo(() => 3 - (result?.checksUsed || 0), [result]);
+  const remainingChecks = quota.remaining;
 
   useEffect(() => {
     async function loadSubjects() {
@@ -65,6 +66,23 @@ export default function StudentSelfCheck() {
     loadSubjects();
   }, []);
 
+  useEffect(() => {
+    if (!selectedSubjectId) return;
+
+    async function loadQuota() {
+      try {
+        const response = await api.get('/student/self-checks/quota', {
+          params: { subject_id: selectedSubjectId },
+        });
+        setQuota(response.data);
+      } catch (error) {
+        setResult({ error: error.response?.data?.error || 'Failed to load your self-check quota.' });
+      }
+    }
+
+    loadQuota();
+  }, [selectedSubjectId]);
+
   async function runSelfCheck(e) {
     e.preventDefault();
     if (remainingChecks <= 0 || !selectedSubjectId || (!repoUrl && !selectedFile)) return;
@@ -79,10 +97,14 @@ export default function StudentSelfCheck() {
       formData.append('source_url', repoUrl);
     }
 
-    setResult({ checking: true, band: null, checksUsed: 1 });
+    setResult({ checking: true, risk_band: null, checksUsed: 1 });
     try {
       const response = await analysisApi.post('/analyze', formData);
       setResult({ ...response.data, checking: false, checksUsed: 1 });
+      const quotaResponse = await api.get('/student/self-checks/quota', {
+        params: { subject_id: selectedSubjectId },
+      });
+      setQuota(quotaResponse.data);
     } catch (error) {
       setResult({
         checking: false,
@@ -234,7 +256,7 @@ export default function StudentSelfCheck() {
             <span className="material-symbols-outlined">arrow_back</span>
             Back to {course.subject_code}
           </button>
-          <span className="student-self-check-remaining">{Math.max(0, 3 - (result?.checksUsed || 0))} of 3 remaining</span>
+          <span className="student-self-check-remaining">{Math.max(0, remainingChecks)} of {quota.limit} remaining</span>
         </div>
         <h3>Self-check submission</h3>
 
@@ -260,8 +282,8 @@ export default function StudentSelfCheck() {
             <p>{result.error}</p>
           ) : (
             <>
-              <span className={`risk-badge ${RISK_META[result.band]?.cls || 'risk-low'}`}>{RISK_META[result.band]?.badge || 'Low'}</span>
-              <p>This aggregate band is derived from structure, commit history, and provenance signals.</p>
+              <span className={`risk-badge ${RISK_META[result.risk_band?.toLowerCase()]?.cls || 'risk-low'}`}>{result.risk_band || 'LOW'}</span>
+              <p>{result.guidance || 'This aggregate band is derived from structure, commit history, and provenance signals.'}</p>
             </>
           )}
         </div>

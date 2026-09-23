@@ -91,6 +91,23 @@ def test_commit_history_metrics_distinguish_single_and_multi_commit_repositories
     }
 
 
+def test_duplicate_messages_and_enrolled_email_are_provenance_signals(tmp_path):
+    repository = write(tmp_path, "history", "def answer():\n    return 42\n")
+    subprocess.run(["git", "init", "-q", "-b", "main"], cwd=repository, check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "student@origintrace.test"], cwd=repository, check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Student"], cwd=repository, check=True, capture_output=True)
+    for index in range(2):
+        if index:
+            (repository / "module.py").write_text(f"def answer():\n    return {index}\n", encoding="utf-8")
+        subprocess.run(["git", "add", "-A"], cwd=repository, check=True, capture_output=True)
+        subprocess.run(["git", "commit", "-q", "-m", "update"], cwd=repository, check=True, capture_output=True)
+
+    result = analyze_directory(repository, "python", enrolled_email="enrolled@origintrace.test")
+    assert result["commit_metrics"]["low_entropy_count"] == 2
+    flags = {flag["flag_type"]: flag for flag in result["provenance_flags"]}
+    assert flags["enrolled_email_mismatch"]["severity"] == "medium"
+
+
 def test_identical_timestamps_and_orphan_root_are_hard_provenance_flags(tmp_path):
     repository = write(tmp_path, "suspicious", "def answer():\n    return 42\n")
     subprocess.run(["git", "init", "-q", "-b", "main"], cwd=repository, check=True, capture_output=True)
@@ -156,12 +173,12 @@ def test_commit_flag_count_matches_stored_commit_signal_rows(tmp_path):
 
     with psycopg.connect(DATABASE_URL) as conn:
         user_id = conn.execute(
-            """INSERT INTO users (email, password_hash, role, full_name)
-               VALUES (gen_random_uuid() || '@risk.origintrace.test', 'x', 'student', 'Risk Probe')
+                """INSERT INTO users (id_number, email, password_hash, role, full_name)
+                    VALUES (substr(md5(random()::text), 1, 20), gen_random_uuid() || '@risk.origintrace.test', 'x', 'student', 'Risk Probe')
                RETURNING id""",
         ).fetchone()[0]
     try:
-        submission_id, _ = save_analysis(str(user_id), "git", "https://example.test/risk-probe.git", False, storable)
+        submission_id, _, _, _ = save_analysis(str(user_id), "git", "https://example.test/risk-probe.git", False, storable)
         with psycopg.connect(DATABASE_URL) as conn:
             stored_rows = conn.execute(
                 "SELECT count(*) FROM commit_signals WHERE submission_id = %s", (submission_id,)

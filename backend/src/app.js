@@ -55,7 +55,7 @@ app.get('/api/instructor/submissions', requireAuth, allowRoles('instructor'), as
     const result = await requirePool().query(
       `SELECT sub.id, u.full_name AS student, subj.subject_code,
               sub.language, sub.status, sub.submitted_at,
-              r.risk_band, r.similarity_score,
+              UPPER(r.risk_band) AS risk_band, r.similarity_score,
               d.decision
        FROM submissions sub
        JOIN users u    ON u.id = sub.student_id
@@ -120,7 +120,8 @@ app.get('/api/instructor/submissions/:id', requireAuth, allowRoles('instructor')
       pool.query(`SELECT signal_type, severity, description, commit_count, timespan_days,
              has_big_bang, low_entropy_count, author_committer_match_pct
           FROM commit_signals WHERE submission_id = $1`, [req.params.id]),
-      pool.query('SELECT flag_type, severity, description FROM provenance_flags WHERE submission_id = $1', [req.params.id]),
+      pool.query(`SELECT flag_type, severity, flag_level, description
+          FROM provenance_flags WHERE submission_id = $1`, [req.params.id]),
       pool.query('SELECT decision, note, decided_at FROM originality_decisions WHERE submission_id = $1', [req.params.id]),
     ]);
 

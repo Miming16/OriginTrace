@@ -27,6 +27,27 @@ def health() -> dict:
     return {"status": "ok", "service": "origintrace-analysis"}
 
 
+def guidance_for(risk_band: str, provenance_flags: list[dict], matches: list[dict]) -> str:
+    if risk_band == "high":
+        return "Review the matched fragments and commit history with your instructor before submitting."
+    if provenance_flags:
+        return "Review the provenance flags and keep a clear record of your development history."
+    if matches:
+        return "Review the matched fragments and revise any code that is not your own."
+    return "No significant structural or provenance concerns were detected."
+
+
+def public_provenance_flags(flags: list[dict]) -> list[dict]:
+    return [
+        {
+            "flag_type": flag["flag_type"],
+            "flag_level": "HARD" if flag.get("severity") == "high" else "SOFT",
+            "description": flag["description"],
+        }
+        for flag in flags
+    ]
+
+
 @app.post("/api/analyze")
 async def analyze(
     source_url: str | None = Form(default=None),
@@ -61,7 +82,7 @@ async def analyze(
 
     try:
         if source_url:
-            result = analyze_git_url(source_url, language)
+            result = analyze_git_url(source_url, language, enrolled_email=user.get("email"))
             source_type = "git"
             source_value = source_url
         else:
@@ -75,7 +96,7 @@ async def analyze(
                         if size > MAX_UPLOAD_BYTES:
                             raise HTTPException(status_code=413, detail="Upload exceeds size limit")
                         output.write(chunk)
-                result = analyze_directory(target.parent, language)
+                result = analyze_directory(target.parent, language, enrolled_email=user.get("email"))
             source_type = "upload"
             source_value = upload.filename or "upload"
         submission_id, saved_band, overlap, cluster_members = save_analysis(user["sub"], source_type, source_value, is_self_check, result, subject_id)
@@ -83,14 +104,19 @@ async def analyze(
         raise
     except (OSError, RuntimeError, ValueError) as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
+    public_flags = public_provenance_flags(result["provenance_flags"])
+    legacy_cluster_members = [match["peer_submission_id"] for match in cluster_members]
     return {
         "submission_id": submission_id,
-        "risk_band": saved_band,
+        "risk_band": saved_band.upper(),
+        "structural_score": round(overlap * 100, 2),
+        "matches": cluster_members,
+        "commit_signals": result["commit_metrics"],
+        "provenance_flags": public_flags,
+        "guidance": guidance_for(saved_band, public_flags, cluster_members),
         "files_included": result["files_included"],
         "boilerplate_lines_excluded": result["boilerplate_lines_excluded"],
         "similarity_score": overlap,
         "commit_metrics": result["commit_metrics"],
-        "commit_signals": result["commit_signals"],
-        "provenance_flags": result["provenance_flags"],
-        "similarity_cluster_members": cluster_members,
+        "similarity_cluster_members": legacy_cluster_members,
     }

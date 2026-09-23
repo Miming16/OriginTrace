@@ -62,8 +62,8 @@ def make_user(role: str) -> str:
     with psycopg.connect(DATABASE_URL) as conn:
         return str(
             conn.execute(
-                """INSERT INTO users (email, password_hash, role, full_name)
-                   VALUES (gen_random_uuid() || '@e2e.origintrace.test', 'x', %s, 'E2E Probe')
+                     """INSERT INTO users (id_number, email, password_hash, role, full_name)
+                         VALUES (substr(md5(random()::text), 1, 20), gen_random_uuid() || '@e2e.origintrace.test', 'x', %s, 'E2E Probe')
                    RETURNING id""",
                 (role,),
             ).fetchone()[0]
@@ -248,6 +248,9 @@ def test_a_git_url_is_cloned_analysed_and_stored(client, student, git_repository
     assert set(body) == {
         "submission_id",
         "risk_band",
+        "structural_score",
+        "matches",
+        "guidance",
         "files_included",
         "boilerplate_lines_excluded",
         "similarity_score",
@@ -257,7 +260,16 @@ def test_a_git_url_is_cloned_analysed_and_stored(client, student, git_repository
         "similarity_cluster_members",
     }
     assert body["files_included"] == 1
-    assert body["risk_band"] in {"low", "medium", "high"}
+    assert body["risk_band"] in {"LOW", "MEDIUM", "HIGH"}
+    assert set(body["commit_signals"]) == {
+        "commit_count",
+        "timespan_days",
+        "has_big_bang",
+        "low_entropy_count",
+        "author_committer_match_pct",
+    }
+    assert body["provenance_flags"][0]["flag_type"] == "enrolled_email_mismatch"
+    assert body["provenance_flags"][0]["flag_level"] == "SOFT"
     assert body["similarity_cluster_members"] == []
 
     with psycopg.connect(DATABASE_URL) as conn:
@@ -305,7 +317,7 @@ def test_an_instructor_sees_the_ingested_row_with_its_risk_band(client, student,
         ).fetchall()
     assert len(rows) == 1
     assert str(rows[0][0]) == response.json()["submission_id"]
-    assert rows[0][2:] == ("python", "complete", response.json()["risk_band"])
+    assert rows[0][2:] == ("python", "complete", response.json()["risk_band"].lower())
     assert rows[0][4] is not None, "the dashboard would show an empty risk band"
 
 
@@ -469,14 +481,8 @@ def test_defect_d09_a_missing_language_field_is_422_not_the_documented_400(clien
     assert response.status_code == 422, "the handler now returns the documented 400 -- D-09 can be closed"
 
 
-def test_defect_d10_git_ingestion_has_a_timeout_and_depth_limit_but_no_size_limit():
-    """WBS 2.1 asks for a clone with 'size/timeout limits'. Only the timeout and
-    a shallow depth exist; nothing bounds how large the cloned tree may be, and
-    MAX_UPLOAD_BYTES applies to uploads only."""
+def test_git_ingestion_preserves_full_history_and_has_a_timeout():
+    """Commit-history metrics require the complete reachable repository history."""
     source = inspect.getsource(pipeline.analyze_git_url)
     assert "timeout=60" in source, "the clone timeout is gone"
-    assert "--depth" in source
-    assert "MAX_UPLOAD_BYTES" not in source
-    assert not any(token in source for token in ("--filter", "max_size", "MAX_REPO", "st_size")), (
-        "a repository size limit appears to exist now -- D-10 can be closed"
-    )
+    assert "--depth" not in source
