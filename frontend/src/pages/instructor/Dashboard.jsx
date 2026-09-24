@@ -316,6 +316,9 @@ export default function InstructorDashboard() {
                     ))}
                   </div>
                 )}
+                {!loading && submissions.length > 0 && !selected && (
+                  <p className="empty-state">Select a submission from the table above to view detail analysis.</p>
+                )}
               </div>
 
               {selected ? (
@@ -430,11 +433,7 @@ export default function InstructorDashboard() {
                     </>
                   )}
                 </div>
-              ) : (
-                <div className="panel detail-panel empty-detail">
-                  <p className="empty-state">Select a submission from the table above to view detail analysis.</p>
-                </div>
-              )}
+              ) : null}
             </>
           )}
 
