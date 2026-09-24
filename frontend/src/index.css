@@ -621,7 +621,7 @@ button {
 
 .recent-self-check-row:last-child { border-bottom: 0; }
 .recent-self-check-row:hover { background: #f8fbff; }
-.recent-self-check-row strong { font-size: 0.78rem; }
+.recent-self-check-row strong { display: inline-flex; align-items: center; justify-content: center; min-width: 74px; padding: 3px 10px; border-radius: 6px; font-size: 0.78rem; }
 .recent-self-check-row .risk-low { color: #16b957; }
 .recent-self-check-row .risk-medium { color: #f59e0b; }
 .recent-self-check-row time { color: #8296b5; font-size: 0.78rem; text-align: right; }
