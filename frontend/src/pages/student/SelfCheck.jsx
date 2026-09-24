@@ -611,7 +611,6 @@ export default function StudentSelfCheck() {
         <header className="topbar">
           <h2>{activeView === 'dashboard' ? 'Student Dashboard' : activeView === 'courses' ? 'My Courses' : activeView === 'history' ? 'History' : 'Profile & Settings'}</h2>
           <div className="topbar-tools">
-            <span className="role-pill">Student</span>
             <div className="avatar-circle">AA</div>
           </div>
         </header>
