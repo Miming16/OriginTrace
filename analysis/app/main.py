@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .auth import current_user, require_submission_role
 from .config import MAX_UPLOAD_BYTES
-from .db import save_analysis, student_check_limit, student_checks_used, validate_student_subject
+from .db import save_analysis, student_check_limit, student_checks_used, validate_assignment, validate_student_subject
 from .pipeline import analyze_directory, analyze_git_url, validate_language
 
 app = FastAPI(title="OriginTrace Analysis Service", version="0.1.0")
@@ -54,6 +54,7 @@ async def analyze(
     language: str = Form(...),
     is_self_check: bool = Form(default=False),
     subject_id: str | None = Form(default=None),
+    assignment_id: str | None = Form(default=None),
     upload: UploadFile | None = File(default=None),
     user: dict = Depends(current_user),
 ) -> dict:
@@ -80,6 +81,20 @@ async def analyze(
     if is_self_check and student_checks_used(user["sub"], subject_id) >= student_check_limit(subject_id):
         raise HTTPException(status_code=429, detail="Daily self-check limit reached")
 
+    if assignment_id:
+        if not subject_id:
+            raise HTTPException(status_code=400, detail="subject_id is required with assignment_id")
+        try:
+            validate_assignment(assignment_id, subject_id)
+            if not is_self_check and user["role"] == "student":
+                validate_student_subject(user["sub"], subject_id)
+        except PermissionError as error:
+            raise HTTPException(status_code=403, detail=str(error)) from error
+        except LookupError as error:
+            raise HTTPException(status_code=404, detail=str(error)) from error
+        except RuntimeError as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+        
     try:
         if source_url:
             result = analyze_git_url(source_url, language, enrolled_email=user.get("email"))
@@ -99,7 +114,7 @@ async def analyze(
                 result = analyze_directory(target.parent, language, enrolled_email=user.get("email"))
             source_type = "upload"
             source_value = upload.filename or "upload"
-        submission_id, saved_band, overlap, cluster_members = save_analysis(user["sub"], source_type, source_value, is_self_check, result, subject_id)
+        submission_id, saved_band, overlap, cluster_members = save_analysis(user["sub"], source_type, source_value, is_self_check, result, subject_id, assignment_id)
     except HTTPException:
         raise
     except (OSError, RuntimeError, ValueError) as error:

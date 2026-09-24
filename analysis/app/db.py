@@ -60,10 +60,21 @@ def validate_student_subject(user_id: str, subject_id: str) -> None:
     if not subject[1]:
         raise RuntimeError("This subject is closed for submissions")
 
+def validate_assignment(assignment_id: str, subject_id: str) -> None:
+    try:
+        with connection() as conn:
+            row = conn.execute(
+                "SELECT 1 FROM assignments WHERE id = %s AND subject_id = %s",
+                (assignment_id, subject_id),
+            ).fetchone()
+    except psycopg.DataError as error:
+        raise LookupError("Assignment not found in this subject") from error
+    if not row:
+        raise LookupError("Assignment not found in this subject")
 
-def save_analysis(user_id: str, source_type: str, source_url: str, is_self_check: bool, result: dict, subject_id: str | None = None) -> tuple[str, list[str]]:
+def save_analysis(user_id: str, source_type: str, source_url: str, is_self_check: bool, result: dict, subject_id: str | None = None, assignment_id: str | None = None) -> tuple[str, list[str]]:
     with connection() as conn:
-        submission = conn.execute("INSERT INTO submissions (student_id, subject_id, source_type, source_url, language, is_self_check, status) VALUES (%s, %s, %s, %s, %s, %s, 'complete') RETURNING id", (user_id, subject_id, source_type, source_url, result["language"], is_self_check)).fetchone()[0]
+        submission = conn.execute("INSERT INTO submissions (student_id, subject_id, assignment_id, source_type, source_url, language, is_self_check, status) VALUES (%s, %s, %s, %s, %s, %s, %s, 'complete') RETURNING id", (user_id, subject_id, assignment_id, source_type, source_url, result["language"], is_self_check)).fetchone()[0]
         for fingerprint in result["fingerprints"]:
             conn.execute("INSERT INTO fingerprints (submission_id, file_path, hash_value, window_position) VALUES (%s, %s, %s, %s)", (submission, fingerprint["file_path"], fingerprint["hash_value"], fingerprint["window_position"]))
         metrics = result.get("commit_metrics", {})

@@ -56,16 +56,18 @@ app.get('/api/instructor/submissions', requireAuth, allowRoles('instructor'), as
       `SELECT sub.id, u.full_name AS student, subj.subject_code,
               sub.language, sub.status, sub.submitted_at,
               UPPER(r.risk_band) AS risk_band, r.similarity_score,
-              d.decision
+              d.decision, a.title AS assignment
        FROM submissions sub
        JOIN users u    ON u.id = sub.student_id
        JOIN subjects subj ON subj.id = sub.subject_id
        LEFT JOIN risk_scores r ON r.submission_id = sub.id
        LEFT JOIN originality_decisions d ON d.submission_id = sub.id
+       LEFT JOIN assignments a ON a.id = sub.assignment_id
        WHERE subj.instructor_id = $1 AND sub.is_self_check = false
         AND ($2::uuid IS NULL OR subj.id = $2::uuid)
+        AND ($3::uuid IS NULL OR sub.assignment_id = $3::uuid)
        ORDER BY sub.submitted_at DESC`,
-      [req.user.sub, req.query.subject_id || null],
+      [req.user.sub, req.query.subject_id || null, req.query.assignment_id || null],
     );
     return res.json({ submissions: result.rows });
   } catch (error) {
@@ -253,6 +255,47 @@ app.patch('/api/instructor/subjects/:id', requireAuth, allowRoles('instructor'),
   }
 });
 
+app.post('/api/instructor/subjects/:id/assignments', requireAuth, allowRoles('instructor'), async (req, res, next) => {
+  const { title, instructions, due_at: dueAt } = req.body || {};
+  if (!title || !String(title).trim()) {
+    return res.status(400).json({ error: 'title is required' });
+  }
+
+  try {
+    const result = await requirePool().query(
+      `INSERT INTO assignments (subject_id, title, instructions, due_at)
+       SELECT s.id, $3::text, $4::text, $5::timestamptz
+       FROM subjects s
+       WHERE s.id = $1 AND s.instructor_id = $2
+       RETURNING id, subject_id, title, instructions, due_at, created_at`,
+      [req.params.id, req.user.sub, String(title).trim(), instructions || null, dueAt || null],
+    );
+    if (!result.rows[0]) return res.status(404).json({ error: 'Subject not found' });
+    return res.status(201).json({ assignment: result.rows[0] });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+app.get('/api/instructor/subjects/:id/assignments', requireAuth, allowRoles('instructor'), async (req, res, next) => {
+  try {
+    const result = await requirePool().query(
+      `SELECT a.id, a.title, a.instructions, a.due_at, a.created_at,
+              count(sub.id) FILTER (WHERE sub.is_self_check = false)::int AS submission_count
+       FROM assignments a
+       JOIN subjects s ON s.id = a.subject_id
+       LEFT JOIN submissions sub ON sub.assignment_id = a.id
+       WHERE a.subject_id = $1 AND s.instructor_id = $2
+       GROUP BY a.id
+       ORDER BY a.due_at NULLS LAST, a.created_at`,
+      [req.params.id, req.user.sub],
+    );
+    return res.json({ assignments: result.rows });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 app.get('/api/student/subjects', requireAuth, allowRoles('student'), async (req, res, next) => {
   try {
     const result = await requirePool().query(
@@ -264,6 +307,30 @@ app.get('/api/student/subjects', requireAuth, allowRoles('student'), async (req,
       [req.user.sub],
     );
     return res.json({ subjects: result.rows });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+app.get('/api/student/subjects/:id/assignments', requireAuth, allowRoles('student'), async (req, res, next) => {
+  try {
+    const result = await requirePool().query(
+      `SELECT a.id, a.title, a.instructions, a.due_at,
+              count(sub.id) FILTER (WHERE sub.is_self_check)::int AS self_checks,
+              count(sub.id) FILTER (WHERE NOT sub.is_self_check)::int AS attempts,
+              UPPER((array_agg(r.risk_band ORDER BY sub.submitted_at DESC)
+                     FILTER (WHERE sub.is_self_check))[1]) AS last_self_check_band
+       FROM assignments a
+       JOIN subjects s    ON s.id = a.subject_id AND s.is_published = true
+       JOIN enrollments e ON e.subject_id = s.id AND e.student_id = $2
+       LEFT JOIN submissions sub ON sub.assignment_id = a.id AND sub.student_id = $2
+       LEFT JOIN risk_scores r   ON r.submission_id = sub.id
+       WHERE a.subject_id = $1
+       GROUP BY a.id
+       ORDER BY a.due_at NULLS LAST, a.created_at`,
+      [req.params.id, req.user.sub],
+    );
+    return res.json({ assignments: result.rows });
   } catch (error) {
     return next(error);
   }

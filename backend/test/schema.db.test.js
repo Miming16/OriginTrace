@@ -23,6 +23,7 @@ after(async () => {
 });
 
 const EXPECTED_TABLES = [
+  'assignments',
   'commit_signals',
   'enrollments',
   'fingerprints',
@@ -51,6 +52,8 @@ const EXPECTED_FOREIGN_KEYS = [
   ['enrollments', 'student_id', 'users', 'CASCADE'],
   ['enrollments', 'subject_id', 'subjects', 'CASCADE'],
   ['submissions', 'subject_id', 'subjects', 'SET NULL'],
+  ['assignments', 'subject_id', 'subjects', 'CASCADE'],
+  ['submissions', 'assignment_id', 'assignments', 'SET NULL'],
 ];
 
 // [table, distinctive fragment of the CHECK expression]
