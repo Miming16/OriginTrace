@@ -9,32 +9,10 @@ const NAV_ITEMS = [
   { key: 'settings', label: 'Profile & Settings', icon: 'settings' },
 ];
 
-const DEFAULT_COURSES = [
-  { id: 'cs101', subject_code: 'CS101', subject_title: 'Introduction to Programming', enrolled_count: 0, is_open: true },
-  { id: 'cs205', subject_code: 'CS205', subject_title: 'Introduction to Programming', enrolled_count: 0, is_open: true },
-  { id: 'cs302', subject_code: 'CS302', subject_title: 'Introduction to Programming', enrolled_count: 0, is_open: true },
-];
-
 const DEFAULT_COLLABORATOR_REQUESTS = {
   cs101: [
     { id: 'request-sarah', name: 'Sarah Connor', initials: 'SC', assignment: 'Lab 5', repository: 'github.com/sconnor/cs101-lab5', language: 'Python', invited: 'Invited 2h ago' },
     { id: 'request-james', name: 'James Reyes', initials: 'JR', assignment: 'Lab 4', repository: 'github.com/jreyes/cs101-lab4', language: 'C', invited: 'Invited 5h ago' },
-  ],
-};
-
-const DEFAULT_SUBMISSION_ACTIVITY = [
-  { student: 'Sarah Connor', submittedAt: '2026-09-20T08:15:00' },
-  { student: 'James Reyes', submittedAt: '2026-09-20T10:40:00' },
-  { student: 'Maya Santos', submittedAt: '2026-09-21T09:05:00' },
-];
-
-const DEFAULT_COURSE_CONTENT = {
-  assignments: [
-    { id: 'lab-1', title: 'Lab 1 - Programming Basics', due: 'Due Sep 20', status: '24 submissions', createdAt: '2026-09-01', submissions: DEFAULT_SUBMISSION_ACTIVITY },
-    { id: 'lab-2', title: 'Lab 2 - Variables and Data Types', due: 'Due Sep 27', status: '22 submissions', createdAt: '2026-09-05', submissions: DEFAULT_SUBMISSION_ACTIVITY },
-    { id: 'lab-3', title: 'Lab 3 - Functions', due: 'Due Oct 4', status: '20 submissions', createdAt: '2026-09-10', submissions: DEFAULT_SUBMISSION_ACTIVITY },
-    { id: 'lab-4', title: 'Lab 4 - Control Flow', due: 'Due Oct 11', status: '18 submissions', createdAt: '2026-09-15', submissions: DEFAULT_SUBMISSION_ACTIVITY },
-    { id: 'lab-5', title: 'Lab 5 - Functions and Modules', due: 'Due Oct 18', status: '12 submissions', createdAt: '2026-09-20', submissions: DEFAULT_SUBMISSION_ACTIVITY },
   ],
 };
 
@@ -64,7 +42,8 @@ export default function InstructorDashboard() {
   const [collaboratorRequests, setCollaboratorRequests] = useState(DEFAULT_COLLABORATOR_REQUESTS);
   const [assignmentFilter, setAssignmentFilter] = useState('all');
   const [courseCollaborators, setCourseCollaborators] = useState({});
-  const [assignments, setAssignments] = useState(DEFAULT_COURSE_CONTENT.assignments);
+  const [assignments, setAssignments] = useState([]);
+  const [assignmentSubmissions, setAssignmentSubmissions] = useState([]);
   const [assignmentForm, setAssignmentForm] = useState({
     title: '', description: '', points: '100', dueDate: '', dueTime: '23:59',
     attempts: 'unlimited', customAttempts: '', selfCheckLimit: 'unlimited',
@@ -85,12 +64,12 @@ export default function InstructorDashboard() {
     try {
       const res = await api.get('/instructor/subjects');
       const assignedCourses = res.data?.subjects || [];
-      const availableCourses = assignedCourses.length > 0 ? assignedCourses : DEFAULT_COURSES;
+      const availableCourses = assignedCourses;
       setCourses(availableCourses);
       setSelectedCourse(availableCourses[0] || null);
     } catch (err) {
-      setCourses(DEFAULT_COURSES);
-      setSelectedCourse(DEFAULT_COURSES[0]);
+      setCourses([]);
+      setSelectedCourse(null);
       setError(err.response?.data?.message || 'Failed to load assigned courses.');
     }
   }
@@ -107,6 +86,42 @@ export default function InstructorDashboard() {
       setLoading(false);
     }
   }
+
+  async function loadAssignments(courseId) {
+    if (!courseId) {
+      setAssignments([]);
+      return;
+    }
+    try {
+      const res = await api.get(`/instructor/subjects/${courseId}/assignments`);
+      setAssignments((res.data?.assignments || []).map((item) => ({
+        id: item.id,
+        title: item.title,
+        instructions: item.instructions || '',
+        due: item.due_at ? `Due ${new Date(item.due_at).toLocaleString()}` : 'No deadline',
+        status: `${item.submission_count} submission${item.submission_count === 1 ? '' : 's'}`,
+        createdAt: item.created_at,
+      })));
+    } catch {
+      setAssignments([]);
+    }
+  }
+
+  useEffect(() => {
+    setSelectedAssignment(null);
+    setSelectedAssignmentSubmission(null);
+    loadAssignments(selectedCourse?.id);
+  }, [selectedCourse?.id]);
+
+  useEffect(() => {
+    if (!selectedAssignment) {
+      setAssignmentSubmissions([]);
+      return;
+    }
+    api.get('/instructor/submissions', { params: { assignment_id: selectedAssignment.id } })
+      .then((res) => setAssignmentSubmissions(res.data?.submissions || []))
+      .catch(() => setAssignmentSubmissions([]));
+  }, [selectedAssignment?.id]);
 
   useEffect(() => {
     if (!selectedId) {
@@ -171,11 +186,9 @@ export default function InstructorDashboard() {
   const orderedAssignments = [...assignments].sort(
     (first, second) => new Date(first.createdAt) - new Date(second.createdAt),
   );
-  const orderedSubmissionActivity = selectedAssignment
-    ? [...(selectedAssignment.submissions || [])].sort(
-        (first, second) => new Date(first.submittedAt) - new Date(second.submittedAt),
-      )
-    : [];
+  const orderedSubmissionActivity = assignmentSubmissions
+    .map((sub) => ({ id: sub.id, student: sub.student, submittedAt: sub.submitted_at }))
+    .sort((first, second) => new Date(first.submittedAt) - new Date(second.submittedAt));
   const isMediumResult = selectedAssignment?.id === 'lab-2' || selectedAssignment?.id === 'lab-4';
   const integrityScore = isMediumResult ? 74 : 96;
   const structuralScore = isMediumResult ? 52 : 6;
@@ -201,18 +214,23 @@ export default function InstructorDashboard() {
     }));
   }
 
-  function handleCreateAssignment(event) {
+  async function handleCreateAssignment(event) {
     event.preventDefault();
-    const due = assignmentForm.dueDate
-      ? `${assignmentForm.dueDate} at ${assignmentForm.dueTime}`
-      : 'No deadline';
-    setAssignments((current) => [...current, {
-      id: `assignment-${Date.now()}`,
-      title: assignmentForm.title || 'Untitled assignment', due,
-      status: '0 submissions', createdAt: new Date().toISOString().slice(0, 10), submissions: [],
-    }]);
-    setAssignmentForm((current) => ({ ...current, title: '', description: '', dueDate: '' }));
-    setShowNewAssignmentPage(false);
+    if (!selectedCourse) return;
+    try {
+      await api.post(`/instructor/subjects/${selectedCourse.id}/assignments`, {
+        title: assignmentForm.title || 'Untitled assignment',
+        instructions: assignmentForm.description,
+        due_at: assignmentForm.dueDate
+          ? new Date(`${assignmentForm.dueDate}T${assignmentForm.dueTime || '23:59'}`).toISOString()
+          : null,
+      });
+      await loadAssignments(selectedCourse.id);
+      setAssignmentForm((current) => ({ ...current, title: '', description: '', dueDate: '' }));
+      setShowNewAssignmentPage(false);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to create assignment.');
+    }
   }
 
   return (
@@ -339,11 +357,11 @@ export default function InstructorDashboard() {
                         <div>
                           <strong>{s.student || s.name || s.studentName}</strong>
                           <p>
-                            {s.subject || s.course} · Status: <em>{s.status || 'Submitted'}</em> · {s.submittedDate || s.time || 'N/A'}
+                            {s.subject_code}{s.assignment ? ` · ${s.assignment}` : ''} · Status: <em>{s.status || 'Submitted'}</em> · {s.submitted_at ? new Date(s.submitted_at).toLocaleString() : 'N/A'}
                           </p>
                         </div>
                         <div className="submission-row-meta">
-                          {s.lang && <span className="lang-pill">{s.lang}</span>}
+                          {s.language && <span className="lang-pill">{s.language}</span>}
                           {s.flagsCount !== undefined && <span className="flag-pill">{s.flagsCount} flags</span>}
                           <span className={`risk-badge ${RISK_META[s.risk_band]?.cls || 'risk-low'}`}>
                             {s.risk_band}
@@ -393,7 +411,7 @@ export default function InstructorDashboard() {
                           <h4>Peer overlaps</h4>
                           <p>
                             {detailData?.peerOverlaps ||
-                              `Matched against ${detailData?.peerCount || 0} peer submission(s).`}
+                              `Matched against ${detailData?.peers?.length || 0} peer submission(s)${detailData?.peers?.length ? `: ${[...new Set(detailData.peers.map((peer) => peer.peer_student))].join(', ')}` : ''}.`}
                           </p>
                         </div>
 
@@ -657,8 +675,8 @@ export default function InstructorDashboard() {
                               Back to assignments
                             </button>
                             <div className="assignment-detail-heading"><span className="muted">Assignment</span><h3>{selectedAssignment.title}</h3><p>Part of {selectedCourse?.subject_code} - {selectedCourse?.subject_title}</p></div>
-                            <div className="assignment-detail-grid"><div><span>Due date</span><strong>{selectedAssignment.due}</strong></div><div><span>Created</span><strong>{selectedAssignment.createdAt}</strong></div><div><span>Submissions</span><strong>{selectedAssignment.status}</strong></div></div>
-                            <div className="submission-activity"><div className="course-info-section-header"><h3>Submitted by</h3><span className="muted">{orderedSubmissionActivity.length} shown</span></div><div className="submission-activity-list">{orderedSubmissionActivity.map((submission) => <button type="button" key={`${selectedAssignment.id}-${submission.student}`} className="submission-activity-row" onClick={() => setSelectedAssignmentSubmission(submission)}><strong>{submission.student}</strong><span>{new Date(submission.submittedAt).toLocaleString()}</span></button>)}</div></div>
+                            <div className="assignment-detail-grid"><div><span>Due date</span><strong>{selectedAssignment.due}</strong></div><div><span>Created</span><strong>{new Date(selectedAssignment.createdAt).toLocaleDateString()}</strong></div><div><span>Submissions</span><strong>{selectedAssignment.status}</strong></div></div>
+                            <div className="submission-activity"><div className="course-info-section-header"><h3>Submitted by</h3><span className="muted">{orderedSubmissionActivity.length} shown</span></div><div className="submission-activity-list">{orderedSubmissionActivity.map((submission) => <button type="button" key={submission.id} className="submission-activity-row" onClick={() => { fetchSubmissions(); setSelectedId(submission.id); setActiveNav('dashboard'); }}><strong>{submission.student}</strong><span>{new Date(submission.submittedAt).toLocaleString()}</span></button>)}</div></div>
                           </div>
                         )
                       ) : (
@@ -724,7 +742,7 @@ export default function InstructorDashboard() {
                   <div className="profile-details">
                     <div><span>Employee no.</span><strong>{user?.id_number || 'FAC-0087'}</strong></div>
                     <div><span>Email</span><strong>{user?.email || 'd.ramos@university.edu'}</strong></div>
-                    <div><span>Courses</span><strong>{courses.map((course) => course.subject_code).join(' · ') || 'CS101 · CS205 · CS302'}</strong></div>
+                    <div><span>Courses</span><strong>{courses.map((course) => course.subject_code).join(' · ') || '—'}</strong></div>
                   </div>
                 </section>
 

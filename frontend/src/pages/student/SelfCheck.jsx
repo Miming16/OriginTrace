@@ -3,12 +3,6 @@ import { useAuth } from '../../context/AuthContext';
 import api, { analysisApi } from '../../api/axios';
 
 
-const COURSE_ASSIGNMENTS = [
-  { id: 'a1', name: 'Lab 4 — Loops & Functions', detailName: 'Lab 4', due: 'Jun 20', instructions: 'Solve the loops and functions exercises and submit your Python source files.', selfChecks: 3, attempts: 2, band: 'low', status: 'checked', statusLabel: 'Submitted', action: 'checked', integrity: 96, structural: 6, device: 'LAP-042', checkedAt: 'Yesterday 14:15' },
-  { id: 'a2', name: 'Lab 5 — File Handling', detailName: 'Lab 5', due: 'Jun 28', instructions: 'Build a file-processing script that reads, updates, and validates the provided records.', selfChecks: 3, attempts: 1, band: 'low', status: 'submitted', statusLabel: 'Submitted', action: 'result', integrity: 96, structural: 6, device: 'LAP-042', checkedAt: 'Yesterday 14:15' },
-  { id: 'a3', name: 'Lab 6 — Dictionaries', detailName: 'Lab 6', due: 'Jul 12', instructions: 'Create a Python program that uses dictionaries to organize and summarize the supplied data.', selfChecks: 3, attempts: 0, band: null, status: 'pending', statusLabel: 'Not submitted', action: 'self-check', integrity: 0, structural: 0, device: 'LAP-042', checkedAt: 'Not checked' },
-];
-
 const DEFAULT_STUDENT_SUBJECTS = [
   { id: 'cs101', subject_code: 'CS101', subject_title: 'Introduction to Programming', is_open: true },
   { id: 'cs205', subject_code: 'CS205', subject_title: 'Web Development', is_open: true },
@@ -39,6 +33,7 @@ export default function StudentSelfCheck() {
   const [selectedHistoryEntry, setSelectedHistoryEntry] = useState(null);
   const [quota, setQuota] = useState({ limit: 3, used: 0, remaining: 3 });
   const [history, setHistory] = useState([]);
+  const [assignments, setAssignments] = useState([]);
   const selectedSubject = subjects.find((subject) => subject.id === selectedSubjectId);
   const remainingChecks = quota.remaining;
 
@@ -71,6 +66,31 @@ export default function StudentSelfCheck() {
     }
   }
 
+  async function loadAssignments(subjectId = selectedSubjectId) {
+    if (!subjectId) return;
+
+    try {
+      const response = await api.get(`/student/subjects/${subjectId}/assignments`);
+      const mapped = (response.data.assignments || []).map((item) => ({
+        id: item.id,
+        name: item.title,
+        detailName: item.title,
+        due: item.due_at ? new Date(item.due_at).toLocaleString() : 'No deadline',
+        instructions: item.instructions || 'No instructions provided.',
+        selfChecks: item.self_checks,
+        attempts: item.attempts,
+        band: item.last_self_check_band ? item.last_self_check_band.toLowerCase() : null,
+        status: item.attempts > 0 ? 'submitted' : item.self_checks > 0 ? 'checked' : 'pending',
+        statusLabel: item.attempts > 0 ? 'Submitted' : item.self_checks > 0 ? 'Self-checked' : 'Not submitted',
+        action: 'self-check',
+      }));
+      setAssignments(mapped);
+      setSelectedAssignment((current) => (current ? mapped.find((item) => item.id === current.id) || null : null));
+    } catch {
+      setAssignments([]);
+    }
+  }
+
   useEffect(() => {
     async function loadSubjects() {
       try {
@@ -95,16 +115,18 @@ export default function StudentSelfCheck() {
     if (!selectedSubjectId) return;
 
     loadQuota();
+    loadAssignments();
   }, [selectedSubjectId]);
 
-  async function runSelfCheck(e) {
+  async function runSelfCheck(e, isFinal = false) {
     e.preventDefault();
-    if (remainingChecks <= 0 || !selectedSubjectId || (!repoUrl && !selectedFile)) return;
+    if ((!isFinal && remainingChecks <= 0) || !selectedSubjectId || (!repoUrl && !selectedFile)) return;
 
     const formData = new FormData();
     formData.append('language', 'python');
-    formData.append('is_self_check', 'true');
+    formData.append('is_self_check', isFinal ? 'false' : 'true');
     formData.append('subject_id', selectedSubjectId);
+    if (selectedAssignment) formData.append('assignment_id', selectedAssignment.id);
     if (selectedFile) {
       formData.append('upload', selectedFile);
     } else {
@@ -117,6 +139,7 @@ export default function StudentSelfCheck() {
       setResult({ ...response.data, checking: false, checksUsed: 1 });
       await loadQuota();
       await loadHistory();
+      await loadAssignments();
     } catch (error) {
       setResult({
         checking: false,
@@ -211,7 +234,7 @@ export default function StudentSelfCheck() {
           <div>
             <span className="student-course-eyebrow">Selected course</span>
             <h3>{course.subject_code} · {course.subject_title}</h3>
-            <p>Prof. D. Ramos · Python fundamentals</p>
+            <p>{course.is_open ? 'Open for submissions' : 'Closed for submissions'}</p>
           </div>
           <button type="button" className="switch-course-button" onClick={() => {
             setSelectedAssignment(null);
@@ -225,9 +248,9 @@ export default function StudentSelfCheck() {
         <div className="student-assignment-section">
           <div className="student-assignment-heading">
             <strong>Assignments</strong>
-            <span>2 of 3 self-checked · 2 submitted</span>
+            <span>{assignments.filter((item) => item.selfChecks > 0).length} of {assignments.length} self-checked · {assignments.filter((item) => item.attempts > 0).length} submitted</span>
           </div>
-          {COURSE_ASSIGNMENTS.map((assignment) => (
+          {assignments.map((assignment) => (
             <button
               key={assignment.id}
               type="button"
@@ -248,6 +271,7 @@ export default function StudentSelfCheck() {
               </div>
             </button>
           ))}
+          {assignments.length === 0 && <p className="empty-state">No assignments in this course yet.</p>}
         </div>
         <p className="student-course-note">Run a self-check on each assignment before submitting. Press Courses in the sidebar (or Switch Course above) to open the course list.</p>
       </div>
@@ -264,7 +288,7 @@ export default function StudentSelfCheck() {
           </button>
           <span className="student-self-check-remaining">{Math.max(0, remainingChecks)} of {quota.limit} remaining</span>
         </div>
-        <h3>Self-check submission</h3>
+        <h3>{selectedAssignment ? selectedAssignment.name : 'Self-check submission'}</h3>
 
         <form onSubmit={runSelfCheck} className="student-self-check-form">
           <label htmlFor="self-check-repository">Git repository</label>
@@ -277,6 +301,11 @@ export default function StudentSelfCheck() {
           <button type="submit" className="student-run-check-button" disabled={result?.checking || loadingSubjects || !selectedSubject?.is_open || remainingChecks <= 0}>
             {result?.checking ? 'Analyzing...' : 'Run self-check'}
           </button>
+          {selectedAssignment && (
+            <button type="button" className="student-run-check-button" disabled={result?.checking || loadingSubjects || !selectedSubject?.is_open} onClick={(event) => runSelfCheck(event, true)}>
+              Submit to instructor
+            </button>
+          )}
         </form>
 
         <div className="student-self-check-result">
@@ -298,8 +327,7 @@ export default function StudentSelfCheck() {
   }
 
   function renderAssignmentDetail(assignment, course) {
-    const risk = assignment.band ? RISK_META[assignment.band] : RISK_META.low;
-    const deduction = Math.max(0, 100 - assignment.integrity);
+    const risk = assignment.band ? RISK_META[assignment.band] : null;
 
     return (
       <div className="student-assignment-detail">
@@ -312,10 +340,12 @@ export default function StudentSelfCheck() {
           <div>
             <h3>{course.subject_code} · {assignment.detailName}</h3>
             <div className="assignment-detail-meta">
-              <span>Python</span><span>{assignment.device}</span><span>Checked {assignment.checkedAt}</span>
+              <span>Python</span><span>Due {assignment.due}</span><span>{assignment.statusLabel}</span>
             </div>
           </div>
-          <span className="assignment-detail-risk"><i style={{ background: risk.bar }} />{risk.badge}</span>
+          {risk
+            ? <span className="assignment-detail-risk"><i style={{ background: risk.bar }} />{risk.badge}</span>
+            : <span className="risk-badge neutral">Not checked</span>}
         </section>
 
         <section className="panel assignment-overview-panel">
@@ -331,56 +361,6 @@ export default function StudentSelfCheck() {
               Run self-check
             </button>
           )}
-        </section>
-
-        <div className="assignment-detail-stats">
-          <div className="panel assignment-stat-card">
-            <span>Integrity score</span>
-            <strong>{assignment.integrity}%</strong>
-            <div className="integrity-bar"><i style={{ width: `${assignment.integrity}%` }} /></div>
-          </div>
-          <div className="panel assignment-stat-card">
-            <span>Structural score</span>
-            <strong>{assignment.structural}%</strong>
-            <small>Aggregate — no peer details</small>
-          </div>
-          <div className="panel assignment-stat-card">
-            <span>Commit health</span>
-            <strong>Healthy</strong>
-            <small>9 commits · 3 days</small>
-          </div>
-          <div className="panel assignment-stat-card">
-            <span>Flags</span>
-            <strong>0</strong>
-            <small>All clear</small>
-          </div>
-        </div>
-
-        <section className="panel score-calculation-panel">
-          <h3><span className="material-symbols-outlined">calculate</span> How your {assignment.integrity}% is calculated</h3>
-          <p>Each detected signal deducts weighted points from a base score of 100. The deductions are added together and the total is converted into your integrity percentage.</p>
-          <div className="score-table">
-            <div><strong>Base score</strong><strong>100</strong></div>
-            <div><span>Minor structural echoes ({assignment.structural}% match)</span><b>-{deduction}</b></div>
-            <div><strong>Total deductions</strong><strong>-{deduction}</strong></div>
-          </div>
-          <strong>Integrity score = 100 − {deduction} = <em>{assignment.integrity}%</em></strong>
-        </section>
-
-        <div className="assignment-detail-bottom">
-          <section className="panel detail-info-panel">
-            <h3><span className="material-symbols-outlined">flag</span> Flags</h3>
-            <div className="clear-flag"><span>✓</span> No flags detected</div>
-          </section>
-          <section className="panel detail-info-panel">
-            <h3><span className="material-symbols-outlined">commit</span> Commit Summary</h3>
-            <div className="commit-summary">• 9 commits over 3 days<br />• Descriptive commit messages<br />• No force-push detected<br />• Author-committer match: 100%</div>
-          </section>
-        </div>
-
-        <section className="panel guidance-panel">
-          <h3><span className="material-symbols-outlined">lightbulb</span> Guidance</h3>
-          <p>Clean result. No action needed.</p>
         </section>
       </div>
     );
