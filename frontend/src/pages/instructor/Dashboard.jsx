@@ -39,9 +39,9 @@ const DEFAULT_COURSE_CONTENT = {
 };
 
 const RISK_META = {
-  Low: { cls: 'risk-low', text: 'text-risk-low' },
-  Medium: { cls: 'risk-medium', text: 'text-risk-medium' },
-  High: { cls: 'risk-high', text: 'text-risk-high' },
+  LOW: { cls: 'risk-low', text: 'text-risk-low' },
+  MEDIUM: { cls: 'risk-medium', text: 'text-risk-medium' },
+  HIGH: { cls: 'risk-high', text: 'text-risk-high' },
 };
 
 export default function InstructorDashboard() {
@@ -210,7 +210,7 @@ export default function InstructorDashboard() {
         </nav>
 
         <div className="sidebar-footer">
-          <span>{user?.fullName || 'Instructor'}</span>
+          <span>{user?.full_name || 'Instructor'}</span>
           <button className="logout-link" onClick={logout}>Logout</button>
         </div>
       </aside>

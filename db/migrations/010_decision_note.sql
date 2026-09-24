@@ -1,0 +1,1 @@
+ALTER TABLE originality_decisions ADD COLUMN note TEXT;

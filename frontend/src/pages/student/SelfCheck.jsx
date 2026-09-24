@@ -2,11 +2,6 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import api, { analysisApi } from '../../api/axios';
 
-const STUDENT_HISTORY = [
-  { id: 'cs302-p2', course: 'CS302', title: 'CS302 · Project 2', date: 'Today 10:30', device: 'PC-001', band: 'low', integrity: 94, structural: 9, byline: 'Python' },
-  { id: 'cs101-lab5', course: 'CS101', title: 'CS101 · Lab 5', date: 'Yesterday 14:15', device: 'LAP-042', band: 'low', integrity: 96, structural: 6, byline: 'Python' },
-  { id: 'cs205-a3', course: 'CS205', title: 'CS205 · Assignment 3', date: '2 days ago', device: 'PC-001', band: 'medium', integrity: 74, structural: 52, byline: 'JavaScript' },
-];
 
 const COURSE_ASSIGNMENTS = [
   { id: 'a1', name: 'Lab 4 — Loops & Functions', detailName: 'Lab 4', due: 'Jun 20', band: 'low', status: 'checked', statusLabel: 'Submitted', action: 'checked', integrity: 96, structural: 6, device: 'LAP-042', checkedAt: 'Yesterday 14:15' },
@@ -43,7 +38,7 @@ export default function StudentSelfCheck() {
   const [historyCourseFilter, setHistoryCourseFilter] = useState('all');
   const [selectedHistoryEntry, setSelectedHistoryEntry] = useState(null);
   const [quota, setQuota] = useState({ limit: 3, used: 0, remaining: 3 });
-
+  const [history, setHistory] = useState([]);
   const selectedSubject = subjects.find((subject) => subject.id === selectedSubjectId);
   const remainingChecks = quota.remaining;
 
@@ -57,6 +52,22 @@ export default function StudentSelfCheck() {
       setQuota(response.data);
     } catch (error) {
       setResult({ error: error.response?.data?.error || 'Failed to load your self-check quota.' });
+    }
+  }
+
+    async function loadHistory() {
+    try {
+      const response = await api.get('/student/self-checks');
+      setHistory((response.data.self_checks || []).map((check) => ({
+        id: check.id,
+        course: check.subject_code,
+        title: `${check.subject_code} · ${check.subject_title}`,
+        date: new Date(check.submitted_at).toLocaleString(),
+        band: (check.risk_band || 'low').toLowerCase(),
+        byline: check.language,
+      })));
+    } catch (error) {
+      setResult({ error: error.response?.data?.error || 'Failed to load your self-check history.' });
     }
   }
 
@@ -77,6 +88,7 @@ export default function StudentSelfCheck() {
     }
 
     loadSubjects();
+    loadHistory();
   }, []);
 
   useEffect(() => {
@@ -104,6 +116,7 @@ export default function StudentSelfCheck() {
       const response = await analysisApi.post('/analyze', formData);
       setResult({ ...response.data, checking: false, checksUsed: 1 });
       await loadQuota();
+      await loadHistory();
     } catch (error) {
       setResult({
         checking: false,
@@ -113,8 +126,8 @@ export default function StudentSelfCheck() {
   }
 
   const studentStats = [
-    { label: 'Total submissions', value: '12', icon: 'description' },
-    { label: 'Low risk', value: '8', icon: 'check_circle' },
+    { label: 'Total submissions', value: String(history.length), icon: 'description' },
+    { label: 'Low risk', value: String(history.filter((entry) => entry.band === 'low').length), icon: 'check_circle' },
     { label: 'Self-checks left', value: String(Math.max(0, remainingChecks)), icon: 'shield' },
     { label: 'Linked repos', value: '3', icon: 'link' },
   ];
@@ -127,25 +140,25 @@ export default function StudentSelfCheck() {
   ];
 
   function renderDashboard() {
-    const lastSubmission = STUDENT_HISTORY[0];
-    const currentRisk = RISK_META[lastSubmission.band];
+    const lastSubmission = history[0];
+    const currentRisk = lastSubmission ? RISK_META[lastSubmission.band] : null;
 
     return (
       <>
         <div className="student-dashboard-stats">
           <div className="student-dashboard-card">
             <span className="student-card-label">Self-Checks Run</span>
-            <strong>12</strong>
+            <strong>{history.length}</strong>
             <button type="button" className="dashboard-history-link" onClick={() => setActiveView('history')}>View history →</button>
           </div>
           <div className="student-dashboard-card">
             <span className="student-card-label">Last Submission</span>
-            <strong>{lastSubmission.title}</strong>
-            <span className="student-card-meta">2 hours ago</span>
+            <strong>{lastSubmission ? lastSubmission.title : 'No self-checks yet'}</strong>
+            <span className="student-card-meta">{lastSubmission?.date || '—'}</span>
           </div>
           <div className="student-dashboard-card">
             <span className="student-card-label">Current Risk Band</span>
-            <strong className="student-risk-value"><i style={{ background: currentRisk.bar }} />{currentRisk.badge}</strong>
+            <strong className="student-risk-value"><i style={{ background: currentRisk?.bar }} />{currentRisk?.badge || '—'}</strong>
             <span className="student-card-meta">No flags detected</span>
           </div>
           <div className="student-dashboard-card">
@@ -160,7 +173,7 @@ export default function StudentSelfCheck() {
             <h3><span className="material-symbols-outlined">assignment</span> Recent Self-Checks</h3>
           </div>
           <div className="recent-self-checks-list">
-            {STUDENT_HISTORY.map((entry) => (
+            {history.map((entry) => (
               <button
                 key={entry.id}
                 type="button"
@@ -369,7 +382,7 @@ export default function StudentSelfCheck() {
       return renderHistoryDetail(selectedHistoryEntry);
     }
 
-    const visibleHistory = STUDENT_HISTORY.filter((entry) => (
+    const visibleHistory = history.filter((entry) => (
       historyCourseFilter === 'all' || entry.course === historyCourseFilter
     ));
 
@@ -381,7 +394,7 @@ export default function StudentSelfCheck() {
             <label htmlFor="history-course-filter">Course</label>
             <select id="history-course-filter" value={historyCourseFilter} onChange={(event) => setHistoryCourseFilter(event.target.value)}>
               <option value="all">All courses</option>
-              {[...new Set(STUDENT_HISTORY.map((entry) => entry.course))].map((course) => (
+              {[...new Set(history.map((entry) => entry.course))].map((course) => (
                 <option key={course} value={course}>{course}</option>
               ))}
             </select>
@@ -528,10 +541,10 @@ export default function StudentSelfCheck() {
             <h3>Account settings</h3>
           </div>
           <div className="settings-list">
-            <div><span>Name</span><strong>{user?.fullName}</strong></div>
+            <div><span>Name</span><strong>{user?.full_name}</strong></div>
             <div><span>Role</span><strong>Student</strong></div>
             <div><span>Institution</span><strong>USJR</strong></div>
-            <div><span>Self-check quota</span><strong>3 / week</strong></div>
+            <div><span>Self-check quota</span><strong>{quota.limit} / day</strong></div>
           </div>
         </div>
       </div>

@@ -114,7 +114,7 @@ export default function AdminPanel() {
           <span>OriginTrace</span>
         </span>
         <span className="text-sm text-slate-text-secondary">
-          Admin: {user?.fullName || '[Jorge]'}
+          Admin: {user?.full_name || '[Jorge]'}
           <button onClick={logout} className="ml-2 text-secondary font-bold">Sign out</button>
         </span>
       </div>

@@ -63,7 +63,8 @@ app.get('/api/instructor/submissions', requireAuth, allowRoles('instructor'), as
        LEFT JOIN risk_scores r ON r.submission_id = sub.id
        LEFT JOIN originality_decisions d ON d.submission_id = sub.id
        WHERE subj.instructor_id = $1 AND sub.is_self_check = false
-       ORDER BY sub.submitted_at DESC AND ($2::uuid IS NULL OR subj.id = $2::uuid)`,
+        AND ($2::uuid IS NULL OR subj.id = $2::uuid)
+       ORDER BY sub.submitted_at DESC`,
       [req.user.sub, req.query.subject_id || null],
     );
     return res.json({ submissions: result.rows });
