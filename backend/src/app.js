@@ -63,8 +63,8 @@ app.get('/api/instructor/submissions', requireAuth, allowRoles('instructor'), as
        LEFT JOIN risk_scores r ON r.submission_id = sub.id
        LEFT JOIN originality_decisions d ON d.submission_id = sub.id
        WHERE subj.instructor_id = $1 AND sub.is_self_check = false
-       ORDER BY sub.submitted_at DESC`,
-      [req.user.sub],
+       ORDER BY sub.submitted_at DESC AND ($2::uuid IS NULL OR subj.id = $2::uuid)`,
+      [req.user.sub, req.query.subject_id || null],
     );
     return res.json({ submissions: result.rows });
   } catch (error) {
@@ -91,6 +91,27 @@ app.get('/api/student/self-checks/quota', requireAuth, allowRoles('student'), as
     const limit = Number(limitRow.rows[0]?.limit ?? 3);
     const used = usedRow.rows[0].used;
     return res.json({ limit, used, remaining: Math.max(0, limit - used), window: 'daily' });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+app.get('/api/student/self-checks', requireAuth, allowRoles('student'), async (req, res, next) => {
+  try {
+    const result = await requirePool().query(
+      `SELECT sub.id, subj.subject_code, subj.subject_title,
+              sub.language, sub.status, sub.submitted_at,
+              UPPER(r.risk_band) AS risk_band
+       FROM submissions sub
+       LEFT JOIN subjects subj ON subj.id = sub.subject_id
+       LEFT JOIN risk_scores r ON r.submission_id = sub.id
+       WHERE sub.student_id = $1 AND sub.is_self_check = true
+         AND ($2::uuid IS NULL OR sub.subject_id = $2::uuid)
+       ORDER BY sub.submitted_at DESC
+       LIMIT 50`,
+      [req.user.sub, req.query.subject_id || null],
+    );
+    return res.json({ self_checks: result.rows });
   } catch (error) {
     return next(error);
   }
@@ -147,7 +168,16 @@ app.post('/api/instructor/submissions/:id/decision', requireAuth, allowRoles('in
   }
 
   try {
-    const result = await requirePool().query(
+    const pool = requirePool();
+    const owned = await pool.query(
+      `SELECT 1 FROM submissions sub
+       JOIN subjects s ON s.id = sub.subject_id
+       WHERE sub.id = $1 AND s.instructor_id = $2`,
+      [req.params.id, req.user.sub],
+    );
+    if (!owned.rows[0]) return res.status(404).json({ error: 'Submission not found' });
+
+    const result = await pool.query(
       `INSERT INTO originality_decisions (submission_id, instructor_id, decision, note)
        VALUES ($1, $2, $3, $4)
        ON CONFLICT (submission_id)
@@ -364,7 +394,7 @@ app.delete('/api/admin/enrollments/:id', requireAuth, allowRoles('admin'), async
 });
 
 app.use((error, _req, res, _next) => {
-  const status = error.status || 500;
+  const status = error.status || (error.code === '22P02' ? 400 : 500);
   if (status === 500) console.error(error);
   res.status(status).json({ error: status === 500 ? 'Internal server error' : error.message });
 });

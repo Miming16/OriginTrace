@@ -99,7 +99,7 @@ def save_analysis(user_id: str, source_type: str, source_url: str, is_self_check
                    VALUES (%s, %s, %s, CASE WHEN %s = 'high' THEN 'HARD' ELSE 'SOFT' END, %s)""",
                 (submission, flag["flag_type"], flag["severity"], flag["severity"], flag["description"]),
             )
-        hashes = [f["hash_value"] for f in result["fingerprints"]]
+        hashes = list({f["hash_value"] for f in result["fingerprints"]})
         matches, overlap = [], 0.0
         if hashes:
             rows = conn.execute(
@@ -108,9 +108,9 @@ def save_analysis(user_id: str, source_type: str, source_url: str, is_self_check
                    FROM fingerprints f
                    JOIN submissions s ON s.id = f.submission_id
                    JOIN users u ON u.id = s.student_id
-                   WHERE f.hash_value = ANY(%s) AND f.submission_id <> %s
+                   WHERE f.hash_value = ANY(%s) AND s.is_self_check = false AND s.student_id <> %s
                    ORDER BY f.submission_id, f.file_path, f.window_position""",
-                (hashes, submission),
+                (hashes, user_id),
             ).fetchall()
             grouped_matches = {}
             for peer, student_name, file_path, hash_value, window_position in rows:
@@ -127,7 +127,7 @@ def save_analysis(user_id: str, source_type: str, source_url: str, is_self_check
             matches = [
                 {
                     **match,
-                    "overlap_pct": round(100 * len(match["fragments"]) / len(hashes), 2),
+                    "overlap_pct": round(100 * len({f["hash_value"] for f in match["fragments"]}) / len(hashes), 2),
                 }
                 for match in grouped_matches.values()
             ]
@@ -146,7 +146,7 @@ def save_analysis(user_id: str, source_type: str, source_url: str, is_self_check
              len(result["commit_signals"]), len(result["provenance_flags"])),
         )
 
-        if matches:
+        if matches and not is_self_check:
             cluster = conn.execute(
                 "INSERT INTO similarity_clusters (similarity_score) VALUES (%s) RETURNING id",
                 (overlap,),
