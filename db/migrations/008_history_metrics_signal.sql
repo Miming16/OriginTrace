@@ -1,5 +1,5 @@
 ALTER TABLE commit_signals
-    DROP CONSTRAINT commit_signals_signal_type_check;
+    DROP CONSTRAINT IF EXISTS commit_signals_signal_type_check;
 
 ALTER TABLE commit_signals
     ADD CONSTRAINT commit_signals_signal_type_check
