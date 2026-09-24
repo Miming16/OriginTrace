@@ -9,9 +9,9 @@ const STUDENT_HISTORY = [
 ];
 
 const COURSE_ASSIGNMENTS = [
-  { id: 'a1', name: 'Lab 4 — Loops & Functions', detailName: 'Lab 4', due: 'Jun 20', band: 'low', status: 'checked', statusLabel: 'Submitted', action: 'checked', integrity: 96, structural: 6, device: 'LAP-042', checkedAt: 'Yesterday 14:15' },
-  { id: 'a2', name: 'Lab 5 — File Handling', detailName: 'Lab 5', due: 'Jun 28', band: 'low', status: 'submitted', statusLabel: 'Submitted', action: 'result', integrity: 96, structural: 6, device: 'LAP-042', checkedAt: 'Yesterday 14:15' },
-  { id: 'a3', name: 'Lab 6 — Dictionaries', detailName: 'Lab 6', due: 'Jul 12', band: null, status: 'pending', statusLabel: 'Not submitted', action: 'self-check', integrity: 0, structural: 0, device: 'LAP-042', checkedAt: 'Not checked' },
+  { id: 'a1', name: 'Lab 4 — Loops & Functions', detailName: 'Lab 4', due: 'Jun 20', instructions: 'Solve the loops and functions exercises and submit your Python source files.', selfChecks: 3, attempts: 2, band: 'low', status: 'checked', statusLabel: 'Submitted', action: 'checked', integrity: 96, structural: 6, device: 'LAP-042', checkedAt: 'Yesterday 14:15' },
+  { id: 'a2', name: 'Lab 5 — File Handling', detailName: 'Lab 5', due: 'Jun 28', instructions: 'Build a file-processing script that reads, updates, and validates the provided records.', selfChecks: 3, attempts: 1, band: 'low', status: 'submitted', statusLabel: 'Submitted', action: 'result', integrity: 96, structural: 6, device: 'LAP-042', checkedAt: 'Yesterday 14:15' },
+  { id: 'a3', name: 'Lab 6 — Dictionaries', detailName: 'Lab 6', due: 'Jul 12', instructions: 'Create a Python program that uses dictionaries to organize and summarize the supplied data.', selfChecks: 3, attempts: 0, band: null, status: 'pending', statusLabel: 'Not submitted', action: 'self-check', integrity: 0, structural: 0, device: 'LAP-042', checkedAt: 'Not checked' },
 ];
 
 const DEFAULT_STUDENT_SUBJECTS = [
@@ -219,13 +219,7 @@ export default function StudentSelfCheck() {
               key={assignment.id}
               type="button"
               className="student-assignment-row"
-              onClick={() => {
-                if (assignment.action === 'self-check') {
-                  setShowSelfCheckForm(true);
-                } else {
-                  setSelectedAssignment(assignment);
-                }
-              }}
+              onClick={() => setSelectedAssignment(assignment)}
             >
               <div className="student-assignment-copy">
                 <strong>{assignment.name}</strong>
@@ -309,6 +303,21 @@ export default function StudentSelfCheck() {
             </div>
           </div>
           <span className="assignment-detail-risk"><i style={{ background: risk.bar }} />{risk.badge}</span>
+        </section>
+
+        <section className="panel assignment-overview-panel">
+          <h3><span className="material-symbols-outlined">description</span> Assignment details</h3>
+          <p>{assignment.instructions}</p>
+          <div className="assignment-overview-grid">
+            <div><span>Deadline</span><strong>{assignment.due}</strong></div>
+            <div><span>Self-checks</span><strong>{assignment.selfChecks}</strong></div>
+            <div><span>Attempts</span><strong>{assignment.attempts}</strong></div>
+          </div>
+          {assignment.action === 'self-check' && (
+            <button type="button" className="student-run-check-button assignment-run-check-button" onClick={() => setShowSelfCheckForm(true)}>
+              Run self-check
+            </button>
+          )}
         </section>
 
         <div className="assignment-detail-stats">
