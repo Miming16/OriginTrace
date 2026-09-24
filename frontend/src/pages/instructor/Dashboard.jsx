@@ -60,9 +60,16 @@ export default function InstructorDashboard() {
   const [selectedAssignment, setSelectedAssignment] = useState(null);
   const [selectedAssignmentSubmission, setSelectedAssignmentSubmission] = useState(null);
   const [showCollaboratorRequestsPage, setShowCollaboratorRequestsPage] = useState(false);
+  const [showNewAssignmentPage, setShowNewAssignmentPage] = useState(false);
   const [collaboratorRequests, setCollaboratorRequests] = useState(DEFAULT_COLLABORATOR_REQUESTS);
   const [assignmentFilter, setAssignmentFilter] = useState('all');
   const [courseCollaborators, setCourseCollaborators] = useState({});
+  const [assignments, setAssignments] = useState(DEFAULT_COURSE_CONTENT.assignments);
+  const [assignmentForm, setAssignmentForm] = useState({
+    title: '', description: '', points: '100', dueDate: '', dueTime: '23:59',
+    attempts: 'unlimited', customAttempts: '', selfCheckLimit: 'unlimited',
+    languages: ['Python', 'Java', 'C', 'PHP'], acceptLate: false,
+  });
 
   const [loading, setLoading] = useState(true);
   const [loadingDetail, setLoadingDetail] = useState(false);
@@ -161,7 +168,7 @@ export default function InstructorDashboard() {
     ? selectedCourseRequests
     : selectedCourseRequests.filter((request) => request.assignment === assignmentFilter);
   const assignmentOptions = [...new Set(selectedCourseRequests.map((request) => request.assignment))];
-  const orderedAssignments = [...DEFAULT_COURSE_CONTENT.assignments].sort(
+  const orderedAssignments = [...assignments].sort(
     (first, second) => new Date(first.createdAt) - new Date(second.createdAt),
   );
   const orderedSubmissionActivity = selectedAssignment
@@ -179,6 +186,33 @@ export default function InstructorDashboard() {
       ...current,
       [selectedCourse.id]: (current[selectedCourse.id] || []).filter((request) => request.id !== requestId),
     }));
+  }
+
+  function updateAssignmentField(field, value) {
+    setAssignmentForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function toggleAssignmentLanguage(language) {
+    setAssignmentForm((current) => ({
+      ...current,
+      languages: current.languages.includes(language)
+        ? current.languages.filter((item) => item !== language)
+        : [...current.languages, language],
+    }));
+  }
+
+  function handleCreateAssignment(event) {
+    event.preventDefault();
+    const due = assignmentForm.dueDate
+      ? `${assignmentForm.dueDate} at ${assignmentForm.dueTime}`
+      : 'No deadline';
+    setAssignments((current) => [...current, {
+      id: `assignment-${Date.now()}`,
+      title: assignmentForm.title || 'Untitled assignment', due,
+      status: '0 submissions', createdAt: new Date().toISOString().slice(0, 10), submissions: [],
+    }]);
+    setAssignmentForm((current) => ({ ...current, title: '', description: '', dueDate: '' }));
+    setShowNewAssignmentPage(false);
   }
 
   return (
@@ -234,6 +268,7 @@ export default function InstructorDashboard() {
                     setSelectedCourse(course);
                     setIsCourseMenuOpen(false);
                     setShowCollaboratorRequestsPage(false);
+                    setShowNewAssignmentPage(false);
                   }}
                 >
                   <strong>{course.subject_code}</strong>
@@ -251,7 +286,9 @@ export default function InstructorDashboard() {
             {activeNav === 'dashboard'
               ? 'Instructor Dashboard'
               : activeNav === 'courses'
-              ? showCollaboratorRequestsPage
+              ? showNewAssignmentPage
+                ? 'Create New Assignment'
+                : showCollaboratorRequestsPage
                 ? 'Collaborator Requests'
                 : 'Courses'
               : activeNav === 'flags'
@@ -439,25 +476,65 @@ export default function InstructorDashboard() {
 
           {activeNav === 'courses' && (
             <div className="panel">
-              {!showCollaboratorRequestsPage ? (
+              {!showCollaboratorRequestsPage && !showNewAssignmentPage ? (
                 <div className="panel-header course-workspace-header">
                   <div className="course-page-title">
                     <span className="muted">Course workspace</span>
                     <h3>{selectedCourse?.subject_code || 'Course roster'}</h3>
                     {selectedCourse && <p>{selectedCourse.subject_title}</p>}
                   </div>
-                  <button
-                    type="button"
-                    className="primary-button small add-collaborator-button"
-                    disabled={!selectedCourse}
-                    onClick={() => setShowCollaboratorRequestsPage(true)}
-                  >
-                    Collaborator Request
-                  </button>
+                  <div className="course-workspace-actions">
+                    <button type="button" className="ghost-button small" disabled={!selectedCourse} onClick={() => setShowNewAssignmentPage(true)}>
+                      Create new assignment
+                    </button>
+                    <button type="button" className="primary-button small add-collaborator-button" disabled={!selectedCourse} onClick={() => setShowCollaboratorRequestsPage(true)}>
+                      Collaborator Request
+                    </button>
+                  </div>
                 </div>
               ) : null}
               {courses.length === 0 ? (
                 <p className="empty-state">No courses are assigned to this instructor yet.</p>
+              ) : showNewAssignmentPage ? (
+                <div className="new-assignment-page">
+                  <div className="new-assignment-header">
+                    <button type="button" className="back-link" onClick={() => setShowNewAssignmentPage(false)}><span className="material-symbols-outlined">arrow_back</span>Back to course</button>
+                    <h3>New Assignment</h3>
+                    <p>Students see the title, instructions, and deadline. Detection settings apply per assignment.</p>
+                  </div>
+                  <form className="new-assignment-form" onSubmit={handleCreateAssignment}>
+                    <div className="assignment-form-grid points-row">
+                      <label htmlFor="assignment-points">Points
+                        <input id="assignment-points" type="number" min="0" value={assignmentForm.points} onChange={(event) => updateAssignmentField('points', event.target.value)} />
+                      </label>
+                    </div>
+                    <label htmlFor="assignment-title">Title
+                      <input id="assignment-title" required value={assignmentForm.title} onChange={(event) => updateAssignmentField('title', event.target.value)} placeholder="e.g. Lab 7 — Classes & Objects" />
+                    </label>
+                    <label htmlFor="assignment-description">Description / Instructions
+                      <textarea id="assignment-description" rows="4" value={assignmentForm.description} onChange={(event) => updateAssignmentField('description', event.target.value)} placeholder="What students need to build, constraints, grading notes..." />
+                    </label>
+                    <div className="assignment-form-grid deadline-row">
+                      <label htmlFor="assignment-due-date">Deadline date
+                        <input id="assignment-due-date" type="date" value={assignmentForm.dueDate} onChange={(event) => updateAssignmentField('dueDate', event.target.value)} />
+                      </label>
+                      <label htmlFor="assignment-due-time">Deadline time
+                        <input id="assignment-due-time" type="time" value={assignmentForm.dueTime} onChange={(event) => updateAssignmentField('dueTime', event.target.value)} />
+                      </label>
+                      <label htmlFor="assignment-attempts">Submission attempts
+                        <select id="assignment-attempts" value={assignmentForm.attempts} onChange={(event) => updateAssignmentField('attempts', event.target.value)}><option value="unlimited">Unlimited</option><option value="1">1 attempt</option><option value="2">2 attempts</option><option value="3">3 attempts</option><option value="custom">Custom</option></select>
+                        {assignmentForm.attempts === 'custom' && <input type="number" min="1" step="1" required value={assignmentForm.customAttempts} onChange={(event) => updateAssignmentField('customAttempts', event.target.value)} placeholder="Enter number of attempts" aria-label="Custom submission attempts" />}
+                      </label>
+                      <label htmlFor="assignment-self-check-limit">Self-check limit
+                        <select id="assignment-self-check-limit" value={assignmentForm.selfCheckLimit} onChange={(event) => updateAssignmentField('selfCheckLimit', event.target.value)}><option value="unlimited">Unlimited</option><option value="1">1 run</option><option value="3">3 runs</option><option value="5">5 runs</option></select>
+                      </label>
+                    </div>
+                    <p className="assignment-form-help">Submission attempts control how many times a student can resubmit before the deadline. Every self-check run is logged; unusually frequent checking is soft-flagged regardless of the limit.</p>
+                    <fieldset className="language-options"><legend>Allowed languages</legend>{['Python', 'Java', 'C', 'PHP'].map((language) => <label key={language}><input type="checkbox" checked={assignmentForm.languages.includes(language)} onChange={() => toggleAssignmentLanguage(language)} /> {language}</label>)}</fieldset>
+                    <label className="late-submission-option"><input type="checkbox" checked={assignmentForm.acceptLate} onChange={(event) => updateAssignmentField('acceptLate', event.target.checked)} /> Accept late submissions</label>
+                    <div className="new-assignment-actions"><button type="submit" className="primary-button">Create Assignment</button><button type="button" className="text-button" onClick={() => setShowNewAssignmentPage(false)}>Cancel</button></div>
+                  </form>
+                </div>
               ) : showCollaboratorRequestsPage ? (
                 <div className="collaborator-request-page">
                   <div className="collaborator-request-page-header">
