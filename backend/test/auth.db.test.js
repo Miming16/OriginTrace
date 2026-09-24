@@ -47,7 +47,7 @@ test('login with correct credentials returns a token and the public user', { ski
     id_number: SEED.instructor.id_number,
     email: SEED.instructor.email,
     role: 'instructor',
-    full_name: 'Angeline Instructor',
+    full_name: 'Angeline',
   });
 });
 

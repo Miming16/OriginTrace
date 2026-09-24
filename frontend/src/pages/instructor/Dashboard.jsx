@@ -49,6 +49,8 @@ export default function InstructorDashboard() {
   const [activeNav, setActiveNav] = useState('dashboard');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isCourseMenuOpen, setIsCourseMenuOpen] = useState(false);
+  const [isGitHubConnected, setIsGitHubConnected] = useState(false);
+  const [trackDevice, setTrackDevice] = useState(true);
 
   const [submissions, setSubmissions] = useState([]);
   const [courses, setCourses] = useState([]);
@@ -56,6 +58,7 @@ export default function InstructorDashboard() {
   const [detailData, setDetailData] = useState(null);
   const [selectedCourse, setSelectedCourse] = useState(null);
   const [selectedAssignment, setSelectedAssignment] = useState(null);
+  const [selectedAssignmentSubmission, setSelectedAssignmentSubmission] = useState(null);
   const [showCollaboratorRequestsPage, setShowCollaboratorRequestsPage] = useState(false);
   const [collaboratorRequests, setCollaboratorRequests] = useState(DEFAULT_COLLABORATOR_REQUESTS);
   const [assignmentFilter, setAssignmentFilter] = useState('all');
@@ -166,6 +169,10 @@ export default function InstructorDashboard() {
         (first, second) => new Date(first.submittedAt) - new Date(second.submittedAt),
       )
     : [];
+  const isMediumResult = selectedAssignment?.id === 'lab-2' || selectedAssignment?.id === 'lab-4';
+  const integrityScore = isMediumResult ? 74 : 96;
+  const structuralScore = isMediumResult ? 52 : 6;
+  const deduction = 100 - integrityScore;
 
   function handleCollaboratorRequest(requestId) {
     setCollaboratorRequests((current) => ({
@@ -535,49 +542,49 @@ export default function InstructorDashboard() {
                   <div className="course-overview-grid">
                     <section className="course-info-section">
                       {selectedAssignment ? (
-                        <div className="assignment-detail-view">
-                          <button
-                            type="button"
-                            className="back-link"
-                            onClick={() => setSelectedAssignment(null)}
-                          >
-                            <span className="material-symbols-outlined">arrow_back</span>
-                            Back to assignments
-                          </button>
-                          <div className="assignment-detail-heading">
-                            <span className="muted">Assignment</span>
-                            <h3>{selectedAssignment.title}</h3>
-                            <p>Part of {selectedCourse?.subject_code} - {selectedCourse?.subject_title}</p>
-                          </div>
-                          <div className="assignment-detail-grid">
-                            <div>
-                              <span>Due date</span>
-                              <strong>{selectedAssignment.due}</strong>
-                            </div>
-                            <div>
-                              <span>Created</span>
-                              <strong>{selectedAssignment.createdAt}</strong>
-                            </div>
-                            <div>
-                              <span>Submissions</span>
-                              <strong>{selectedAssignment.status}</strong>
-                            </div>
-                          </div>
-                          <div className="submission-activity">
-                            <div className="course-info-section-header">
-                              <h3>Submitted by</h3>
-                              <span className="muted">{orderedSubmissionActivity.length} shown</span>
-                            </div>
-                            <div className="submission-activity-list">
-                              {orderedSubmissionActivity.map((submission) => (
-                                <div key={`${selectedAssignment.id}-${submission.student}`} className="submission-activity-row">
-                                  <strong>{submission.student}</strong>
-                                  <span>{new Date(submission.submittedAt).toLocaleString()}</span>
+                        selectedAssignmentSubmission ? (
+                          <div className="student-assignment-detail">
+                            <button type="button" className="back-link student-detail-back" onClick={() => setSelectedAssignmentSubmission(null)}>
+                              <span className="material-symbols-outlined">arrow_back</span>
+                              Back to submissions
+                            </button>
+                            <section className="panel assignment-detail-hero">
+                              <div>
+                                <h3>{selectedCourse?.subject_code} · {selectedAssignment.title}</h3>
+                                <div className="assignment-detail-meta">
+                                  <span>Python</span><span>PC-001</span><span>Checked Today 10:30</span>
                                 </div>
-                              ))}
+                              </div>
+                              <span className={`assignment-detail-risk ${isMediumResult ? 'medium-risk' : ''}`}><i style={{ background: isMediumResult ? '#f59e0b' : '#18bd5b' }} />{isMediumResult ? 'Medium' : 'Low'}</span>
+                            </section>
+                            <div className="assignment-detail-stats">
+                              <div className="panel assignment-stat-card"><span>Integrity score</span><strong className={isMediumResult ? 'medium-value' : ''}>{integrityScore}%</strong><div className="integrity-bar"><i className={isMediumResult ? 'medium-bar' : ''} style={{ width: `${integrityScore}%` }} /></div></div>
+                              <div className="panel assignment-stat-card"><span>Structural score</span><strong>{structuralScore}%</strong><small>Aggregate — no peer details</small></div>
+                              <div className="panel assignment-stat-card"><span>Commit health</span><strong>{isMediumResult ? 'Variable' : 'Healthy'}</strong><small>{isMediumResult ? '8 commits · 2 days' : '9 commits · 3 days'}</small></div>
+                              <div className="panel assignment-stat-card"><span>Flags</span><strong className={isMediumResult ? 'medium-value' : ''}>{isMediumResult ? '1' : '0'}</strong><small>{isMediumResult ? 'Advisory only' : 'All clear'}</small></div>
+                            </div>
+                            <section className="panel score-calculation-panel">
+                              <h3><span className="material-symbols-outlined">calculate</span> How your {integrityScore}% is calculated</h3>
+                              <p>Each detected signal deducts weighted points from a base score of 100. The deductions are added together and the total is converted into your integrity percentage.</p>
+                              <div className="score-table"><div><strong>Base score</strong><strong>100</strong></div>{isMediumResult ? <><div><span>Structural similarity above threshold (52%)</span><b className="medium-value">−16</b></div><div><span>Low entropy commit messages</span><b className="medium-value">−6</b></div><div><span>Activity burst before deadline</span><b className="medium-value">−4</b></div></> : <div><span>Minor structural echoes (6% match)</span><b>−4</b></div>}<div><strong>Total deductions</strong><strong className={isMediumResult ? 'medium-value' : ''}>−{deduction}</strong></div></div>
+                              <strong>Integrity score = 100 − {deduction} = <em className={isMediumResult ? 'medium-value' : ''}>{integrityScore}%</em></strong>
+                            </section>
+                            <div className="assignment-detail-bottom">
+                              <section className="panel detail-info-panel"><h3 className={isMediumResult ? 'medium-heading' : ''}><span className="material-symbols-outlined">flag</span> Flags</h3>{isMediumResult ? <div className="warning-flag">▲ Low entropy commit messages — 3 commits with vague descriptions ("fix", "update")</div> : <div className="clear-flag"><span>✓</span> No flags detected</div>}</section>
+                              <section className="panel detail-info-panel"><h3><span className="material-symbols-outlined">commit</span> Commit Summary</h3><div className="commit-summary">• {isMediumResult ? '8 commits over 2 days' : '9 commits over 3 days'}<br />{isMediumResult && <>• 1 burst of activity detected<br /></>}• No force-push detected<br />• Author-committer match: 100%</div></section>
                             </div>
                           </div>
-                        </div>
+                        ) : (
+                          <div className="assignment-detail-view">
+                            <button type="button" className="back-link" onClick={() => setSelectedAssignment(null)}>
+                              <span className="material-symbols-outlined">arrow_back</span>
+                              Back to assignments
+                            </button>
+                            <div className="assignment-detail-heading"><span className="muted">Assignment</span><h3>{selectedAssignment.title}</h3><p>Part of {selectedCourse?.subject_code} - {selectedCourse?.subject_title}</p></div>
+                            <div className="assignment-detail-grid"><div><span>Due date</span><strong>{selectedAssignment.due}</strong></div><div><span>Created</span><strong>{selectedAssignment.createdAt}</strong></div><div><span>Submissions</span><strong>{selectedAssignment.status}</strong></div></div>
+                            <div className="submission-activity"><div className="course-info-section-header"><h3>Submitted by</h3><span className="muted">{orderedSubmissionActivity.length} shown</span></div><div className="submission-activity-list">{orderedSubmissionActivity.map((submission) => <button type="button" key={`${selectedAssignment.id}-${submission.student}`} className="submission-activity-row" onClick={() => setSelectedAssignmentSubmission(submission)}><strong>{submission.student}</strong><span>{new Date(submission.submittedAt).toLocaleString()}</span></button>)}</div></div>
+                          </div>
+                        )
                       ) : (
                         <>
                           <div className="course-info-section-header">
@@ -590,7 +597,10 @@ export default function InstructorDashboard() {
                                 type="button"
                                 key={assignment.id}
                                 className="course-item-row assignment-row"
-                                onClick={() => setSelectedAssignment(assignment)}
+                                onClick={() => {
+                                  setSelectedAssignment(assignment);
+                                  setSelectedAssignmentSubmission(null);
+                                }}
                               >
                                 <span className="assignment-row-content">
                                   <strong>{assignment.title}</strong>
@@ -628,17 +638,67 @@ export default function InstructorDashboard() {
           )}
 
           {activeNav === 'settings' && (
-            <div className="profile-layout">
-              <div className="panel">
-                <div className="panel-header">
-                  <h3>Account</h3>
-                </div>
-                <div className="settings-list">
-                  <div><span>Instructor</span><strong>{user?.fullName}</strong></div>
-                  <div><span>Department</span><strong>Computer Science</strong></div>
-                  <div><span>Region</span><strong>USJR</strong></div>
-                  <div><span>Security</span><strong>JWT + HTTPS</strong></div>
-                </div>
+            <div className="profile-settings-page">
+              <div className="profile-settings-top">
+                <section className="panel profile-card">
+                  <div className="profile-avatar">{(user?.full_name || user?.fullName || 'DR').slice(0, 2).toUpperCase()}</div>
+                  <h3>{user?.full_name || user?.fullName || 'Prof. Daniel Ramos'}</h3>
+                  <p>Computer Science Department</p>
+                  <span className="role-badge">Instructor</span>
+                  <div className="profile-details">
+                    <div><span>Employee no.</span><strong>{user?.id_number || 'FAC-0087'}</strong></div>
+                    <div><span>Email</span><strong>{user?.email || 'd.ramos@university.edu'}</strong></div>
+                    <div><span>Courses</span><strong>{courses.map((course) => course.subject_code).join(' · ') || 'CS101 · CS205 · CS302'}</strong></div>
+                  </div>
+                </section>
+
+                <section className="panel connected-accounts-panel">
+                  <div className="settings-panel-heading">
+                    <h3>Connected Accounts</h3>
+                    <p>Connect your GitHub account to accept student repository invites and review coursework repos.</p>
+                  </div>
+                  <div className="connected-account-row">
+                    <div className="connected-account-name">
+                      <span className="github-mark">●</span>
+                      <div><strong>GitHub</strong><span>{isGitHubConnected ? 'Connected' : 'Not connected'}</span></div>
+                    </div>
+                    <button type="button" className="dark-button" onClick={() => setIsGitHubConnected((value) => !value)}>
+                      {isGitHubConnected ? 'Disconnect GitHub' : 'Connect GitHub'}
+                    </button>
+                  </div>
+                </section>
+              </div>
+
+              <div className="profile-settings-bottom">
+                <section className="panel detection-panel">
+                  <h3 className="settings-section-title">Detection Parameters</h3>
+                  <div className="settings-field">
+                    <label>Sensitivity</label>
+                    <div className="fixed-setting"><strong>Always Maximum</strong><span>✓ Fixed</span></div>
+                    <p>Detection always runs at full sensitivity — every signal is collected and scored. Flags remain advisory.</p>
+                  </div>
+                  <div className="settings-field">
+                    <label htmlFor="risk-threshold">Risk Threshold</label>
+                    <select id="risk-threshold" defaultValue="50"><option value="50">50% · Standard</option></select>
+                  </div>
+                  <div className="settings-field">
+                    <label htmlFor="comparison-limit">Comparison Limit</label>
+                    <select id="comparison-limit" defaultValue="250"><option value="250">250 submissions per batch</option></select>
+                    <p>Estimated load time: ~12s for 250 submissions</p>
+                  </div>
+                  <div className="device-tracking-field">
+                    <label htmlFor="device-tracking">Device Tracking</label>
+                    <label className="checkbox-label"><input id="device-tracking" type="checkbox" checked={trackDevice} onChange={(event) => setTrackDevice(event.target.checked)} /> Track MAC addresses for provenance</label>
+                    <p>Helps identify if code is written on multiple devices</p>
+                  </div>
+                </section>
+
+                <section className="panel integrations-panel">
+                  <h3 className="settings-section-title">Integrations</h3>
+                  <div className="integration-row"><div><strong>Keystroke Extension</strong><span>Provenance metadata tracking</span></div><b>✓ Active</b></div>
+                  <div className="integration-row"><div><strong>PostgreSQL</strong><span>Docker · Self-Hosted</span></div><b>✓ Online</b></div>
+                  <div className="sync-status"><strong>▣ Sync Status</strong><span>Last sync: 2 minutes ago · 142 submissions indexed</span><div className="sync-bar"><i /></div></div>
+                </section>
               </div>
             </div>
           )}
