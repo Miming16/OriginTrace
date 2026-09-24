@@ -603,7 +603,7 @@ export default function InstructorDashboard() {
                       <h3>{selectedCourse?.subject_code}</h3>
                       <p>{selectedCourse?.subject_title}</p>
                       <div className="course-detail-list">
-                        <div><span>Instructor</span><strong>{user?.fullName || 'Assigned instructor'}</strong></div>
+                        <div><span>Instructor</span><strong>{user?.full_name || 'Assigned instructor'}</strong></div>
                         <div><span>Enrollment</span><strong>{selectedCourse?.enrolled_count || 0} students</strong></div>
                         <div><span>Availability</span><strong>{selectedCourse?.is_open ? 'Open' : 'Closed'}</strong></div>
                       </div>
