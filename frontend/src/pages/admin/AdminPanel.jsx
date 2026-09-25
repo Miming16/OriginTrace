@@ -14,6 +14,7 @@ export default function AdminPanel() {
   const [selectedInstructor, setSelectedInstructor] = useState('');
   const [subjectCode, setSubjectCode] = useState('');
   const [subjectTitle, setSubjectTitle] = useState('');
+  const [activeTab, setActiveTab] = useState('enrollments');
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -106,22 +107,66 @@ export default function AdminPanel() {
     }
   }
 
+  async function handleCSVUpload(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setError('');
+    setSuccess('');
+    setSubmitting(true);
+    try {
+      const text = await file.text();
+      const lines = text.split(/\r?\n/).filter((line) => line.trim());
+      const studentsToImport = lines.slice(1).map((line) => {
+        const [id_number, full_name, email] = line.split(',').map((value) => value.trim());
+        return { id_number, full_name, email };
+      });
+      const response = await api.post('/admin/students/csv', { students: studentsToImport });
+      await fetchInitialData();
+      setSuccess(`${response.data.count} student${response.data.count === 1 ? '' : 's'} imported successfully.`);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to import students.');
+    } finally {
+      setSubmitting(false);
+      e.target.value = '';
+    }
+  }
+
   return (
-    <div className="min-h-screen bg-background text-primary">
-      <div className="flex items-center justify-between px-6 py-4 border-b border-border-standard bg-white">
-        <span className="font-bold text-lg flex items-center gap-2">
+    <div className="flex min-h-screen bg-background text-primary">
+      <aside className="w-52 shrink-0 bg-white border-r border-border-standard p-4 flex flex-col">
+        <div className="flex items-center gap-2 font-bold text-lg mb-8">
           <img src="/origintrace-logo-home.png" alt="OriginTrace logo" className="brand-logo mini-logo" />
           <span>OriginTrace</span>
-        </span>
-        <span className="text-sm text-slate-text-secondary">
-          Admin: {user?.full_name || '[Jorge]'}
-          <button onClick={logout} className="ml-2 text-secondary font-bold">Sign out</button>
-        </span>
-      </div>
+        </div>
+        <nav className="space-y-1" aria-label="Admin sections">
+          {[
+            ['students', 'Students'],
+            ['subjects', 'Subjects'],
+            ['enrollments', 'Enrollments'],
+          ].map(([tab, label]) => (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => setActiveTab(tab)}
+              className={`w-full text-left px-3 py-2 rounded-lg text-sm font-semibold ${activeTab === tab ? 'bg-secondary text-white' : 'text-slate-text-secondary hover:bg-surface-container-low'}`}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
+        <div className="mt-auto pt-8">
+          <p className="text-xs text-slate-text-muted mb-2">Admin: {user?.full_name || 'Admin'}</p>
+          <button type="button" onClick={logout} className="w-full text-left px-3 py-2 text-sm font-bold text-secondary hover:bg-surface-container-low rounded-lg">
+            Sign out
+          </button>
+        </div>
+      </aside>
 
-      <div className="max-w-3xl mx-auto p-6">
+      <main className="flex-1 p-6">
+        <div className="max-w-5xl mx-auto">
         <h2 className="text-xl font-bold mb-1">Admin panel</h2>
-        <p className="text-sm text-slate-text-muted mb-6">Create subjects, assign instructors, and enroll students.</p>
+        <p className="text-sm text-slate-text-muted mb-6">Manage students, subjects, and enrollments.</p>
 
         {error && (
           <div className="bg-risk-high/10 text-risk-high text-sm font-semibold px-4 py-2 rounded-lg mb-4">
@@ -133,6 +178,73 @@ export default function AdminPanel() {
             {success}
           </div>
         )}
+
+        {activeTab === 'students' && (
+          <section>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold text-sm">Students</h3>
+              <label className="bg-secondary text-white px-4 py-2 rounded-lg text-sm font-bold cursor-pointer hover:opacity-90">
+                Import CSV
+                <input type="file" accept=".csv" onChange={handleCSVUpload} disabled={submitting || loading} className="hidden" />
+              </label>
+            </div>
+            {loading ? (
+              <p className="text-sm text-slate-text-muted">Loading students…</p>
+            ) : (
+              <div className="bg-white border border-border-standard rounded-xl overflow-hidden shadow-sm">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-surface-container-low border-b border-border-standard">
+                      <th className="text-left px-4 py-2 font-semibold text-slate-text-muted">ID number</th>
+                      <th className="text-left px-4 py-2 font-semibold text-slate-text-muted">Full name</th>
+                      <th className="text-left px-4 py-2 font-semibold text-slate-text-muted">Email</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border-standard">
+                    {students.map((student) => (
+                      <tr key={student.id}>
+                        <td className="px-4 py-2">{student.id_number}</td>
+                        <td className="px-4 py-2">{student.full_name}</td>
+                        <td className="px-4 py-2">{student.email}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {!students.length && <p className="p-6 text-sm text-slate-text-muted">No students found.</p>}
+              </div>
+            )}
+          </section>
+        )}
+
+        {activeTab === 'subjects' && (
+          <section>
+            <h3 className="font-bold text-sm mb-4">Subjects</h3>
+            <div className="bg-white border border-border-standard rounded-xl overflow-hidden shadow-sm">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-surface-container-low border-b border-border-standard">
+                    <th className="text-left px-4 py-2 font-semibold text-slate-text-muted">Subject code</th>
+                    <th className="text-left px-4 py-2 font-semibold text-slate-text-muted">Title</th>
+                    <th className="text-left px-4 py-2 font-semibold text-slate-text-muted">Instructor</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border-standard">
+                  {subjects.map((subject) => (
+                    <tr key={subject.id}>
+                      <td className="px-4 py-2">{subject.subject_code}</td>
+                      <td className="px-4 py-2">{subject.subject_title}</td>
+                      <td className="px-4 py-2">{subject.instructor || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {!subjects.length && <p className="p-6 text-sm text-slate-text-muted">No subjects found.</p>}
+            </div>
+          </section>
+        )}
+
+        {activeTab === 'enrollments' && (
+          <section>
 
         <form onSubmit={handleCreateSubject} className="bg-white border border-border-standard rounded-xl p-5 mb-6 shadow-sm space-y-3">
           <h3 className="font-bold text-sm">Create subject</h3>
@@ -255,7 +367,10 @@ export default function AdminPanel() {
             </table>
           </div>
         )}
-      </div>
+          </section>
+        )}
+        </div>
+      </main>
     </div>
   );
 }

@@ -339,9 +339,36 @@ app.get('/api/student/subjects/:id/assignments', requireAuth, allowRoles('studen
 app.get('/api/admin/students', requireAuth, allowRoles('admin'), async (_req, res, next) => {
   try {
     const result = await requirePool().query(
-      "SELECT id, full_name, email FROM users WHERE role = 'student' ORDER BY full_name",
+      "SELECT id, id_number, full_name, email FROM users WHERE role = 'student' ORDER BY full_name",
     );
     return res.json({ students: result.rows });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+app.post('/api/admin/students/csv', requireAuth, allowRoles('admin'), async (req, res, next) => {
+  const students = Array.isArray(req.body?.students) ? req.body.students : null;
+  if (!students) return res.status(400).json({ error: 'students must be an array' });
+
+  try {
+    const created = [];
+    for (const student of students) {
+      const { id_number: idNumber, full_name: fullName, email } = student || {};
+      if (!idNumber || !fullName || !email) continue;
+
+      const passwordHash = await bcrypt.hash('Passw0rd!', 10);
+      const result = await requirePool().query(
+        `INSERT INTO users (id_number, full_name, email, password_hash, role)
+         VALUES ($1, $2, $3, $4, 'student')
+         ON CONFLICT (email) DO NOTHING
+         RETURNING id, id_number, full_name, email, role`,
+        [String(idNumber).trim(), String(fullName).trim(), String(email).trim(), passwordHash],
+      );
+      if (result.rows[0]) created.push(result.rows[0]);
+    }
+
+    return res.status(201).json({ created, count: created.length });
   } catch (error) {
     return next(error);
   }
