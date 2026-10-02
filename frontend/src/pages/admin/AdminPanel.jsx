@@ -12,6 +12,8 @@ export default function AdminPanel() {
   const [selectedSubject, setSelectedSubject] = useState('');
   const [selectedStudent, setSelectedStudent] = useState('');
   const [selectedInstructor, setSelectedInstructor] = useState('');
+  const [programFilter, setProgramFilter] = useState('');
+  const [yearLevelFilter, setYearLevelFilter] = useState('');
   const [subjectCode, setSubjectCode] = useState('');
   const [subjectTitle, setSubjectTitle] = useState('');
   const [activeTab, setActiveTab] = useState('enrollments');
@@ -118,8 +120,8 @@ export default function AdminPanel() {
       const text = await file.text();
       const lines = text.split(/\r?\n/).filter((line) => line.trim());
       const studentsToImport = lines.slice(1).map((line) => {
-        const [id_number, full_name, email] = line.split(',').map((value) => value.trim());
-        return { id_number, full_name, email };
+        const [id_number, full_name, email, program, year_level] = line.split(',').map((value) => value.trim());
+        return { id_number, full_name, email, program, year_level };
       });
       const response = await api.post('/admin/students/csv', { students: studentsToImport });
       await fetchInitialData();
@@ -132,6 +134,13 @@ export default function AdminPanel() {
     }
   }
 
+  const programs = [...new Set(students.map((student) => student.program).filter(Boolean))].sort();
+  const yearLevels = [...new Set(students.map((student) => student.year_level).filter(Boolean))].sort();
+  const filteredStudents = students.filter((student) => (
+    (!programFilter || student.program === programFilter)
+    && (!yearLevelFilter || student.year_level === yearLevelFilter)
+  ));
+
   return (
     <div className="flex min-h-screen bg-background text-primary">
       <aside className="w-52 shrink-0 bg-white border-r border-border-standard p-4 flex flex-col">
@@ -142,6 +151,7 @@ export default function AdminPanel() {
         <nav className="space-y-1" aria-label="Admin sections">
           {[
             ['students', 'Students'],
+            ['faculty', 'Faculty'],
             ['subjects', 'Subjects'],
             ['enrollments', 'Enrollments'],
           ].map(([tab, label]) => (
@@ -188,6 +198,28 @@ export default function AdminPanel() {
                 <input type="file" accept=".csv" onChange={handleCSVUpload} disabled={submitting || loading} className="hidden" />
               </label>
             </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+              <select
+                aria-label="Filter students by program"
+                value={programFilter}
+                onChange={(e) => setProgramFilter(e.target.value)}
+                disabled={loading}
+                className="w-full border border-border-standard rounded-lg px-3 py-2 text-sm bg-white"
+              >
+                <option value="">All programs</option>
+                {programs.map((program) => <option key={program} value={program}>{program}</option>)}
+              </select>
+              <select
+                aria-label="Filter students by year level"
+                value={yearLevelFilter}
+                onChange={(e) => setYearLevelFilter(e.target.value)}
+                disabled={loading}
+                className="w-full border border-border-standard rounded-lg px-3 py-2 text-sm bg-white"
+              >
+                <option value="">All year levels</option>
+                {yearLevels.map((yearLevel) => <option key={yearLevel} value={yearLevel}>{yearLevel}</option>)}
+              </select>
+            </div>
             {loading ? (
               <p className="text-sm text-slate-text-muted">Loading students…</p>
             ) : (
@@ -198,19 +230,23 @@ export default function AdminPanel() {
                       <th className="text-left px-4 py-2 font-semibold text-slate-text-muted">ID number</th>
                       <th className="text-left px-4 py-2 font-semibold text-slate-text-muted">Full name</th>
                       <th className="text-left px-4 py-2 font-semibold text-slate-text-muted">Email</th>
+                      <th className="text-left px-4 py-2 font-semibold text-slate-text-muted">Program</th>
+                      <th className="text-left px-4 py-2 font-semibold text-slate-text-muted">Year level</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border-standard">
-                    {students.map((student) => (
+                    {filteredStudents.map((student) => (
                       <tr key={student.id}>
                         <td className="px-4 py-2">{student.id_number}</td>
                         <td className="px-4 py-2">{student.full_name}</td>
                         <td className="px-4 py-2">{student.email}</td>
+                        <td className="px-4 py-2">{student.program || '—'}</td>
+                        <td className="px-4 py-2">{student.year_level || '—'}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-                {!students.length && <p className="p-6 text-sm text-slate-text-muted">No students found.</p>}
+                {!filteredStudents.length && <p className="p-6 text-sm text-slate-text-muted">No students match the selected filters.</p>}
               </div>
             )}
           </section>
@@ -240,6 +276,37 @@ export default function AdminPanel() {
               </table>
               {!subjects.length && <p className="p-6 text-sm text-slate-text-muted">No subjects found.</p>}
             </div>
+          </section>
+        )}
+
+        {activeTab === 'faculty' && (
+          <section>
+            <h3 className="font-bold text-sm mb-4">Faculty</h3>
+            {loading ? (
+              <p className="text-sm text-slate-text-muted">Loading faculty…</p>
+            ) : (
+              <div className="bg-white border border-border-standard rounded-xl overflow-hidden shadow-sm">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-surface-container-low border-b border-border-standard">
+                      <th className="text-left px-4 py-2 font-semibold text-slate-text-muted">Full name</th>
+                      <th className="text-left px-4 py-2 font-semibold text-slate-text-muted">Email</th>
+                      <th className="text-left px-4 py-2 font-semibold text-slate-text-muted">Assigned subjects</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border-standard">
+                    {instructors.map((instructor) => (
+                      <tr key={instructor.id}>
+                        <td className="px-4 py-2">{instructor.full_name}</td>
+                        <td className="px-4 py-2">{instructor.email}</td>
+                        <td className="px-4 py-2">{instructor.subject_count || 0}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {!instructors.length && <p className="p-6 text-sm text-slate-text-muted">No faculty found.</p>}
+              </div>
+            )}
           </section>
         )}
 

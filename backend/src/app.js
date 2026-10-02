@@ -339,7 +339,7 @@ app.get('/api/student/subjects/:id/assignments', requireAuth, allowRoles('studen
 app.get('/api/admin/students', requireAuth, allowRoles('admin'), async (_req, res, next) => {
   try {
     const result = await requirePool().query(
-      "SELECT id, id_number, full_name, email FROM users WHERE role = 'student' ORDER BY full_name",
+      "SELECT id, id_number, full_name, email, program, year_level FROM users WHERE role = 'student' ORDER BY full_name",
     );
     return res.json({ students: result.rows });
   } catch (error) {
@@ -354,16 +354,16 @@ app.post('/api/admin/students/csv', requireAuth, allowRoles('admin'), async (req
   try {
     const created = [];
     for (const student of students) {
-      const { id_number: idNumber, full_name: fullName, email } = student || {};
+      const { id_number: idNumber, full_name: fullName, email, program, year_level: yearLevel } = student || {};
       if (!idNumber || !fullName || !email) continue;
 
       const passwordHash = await bcrypt.hash('Passw0rd!', 10);
       const result = await requirePool().query(
-        `INSERT INTO users (id_number, full_name, email, password_hash, role)
-         VALUES ($1, $2, $3, $4, 'student')
+        `INSERT INTO users (id_number, full_name, email, password_hash, role, program, year_level)
+         VALUES ($1, $2, $3, $4, 'student', $5, $6)
          ON CONFLICT (email) DO NOTHING
-         RETURNING id, id_number, full_name, email, role`,
-        [String(idNumber).trim(), String(fullName).trim(), String(email).trim(), passwordHash],
+         RETURNING id, id_number, full_name, email, role, program, year_level`,
+        [String(idNumber).trim(), String(fullName).trim(), String(email).trim(), passwordHash, program || null, yearLevel || null],
       );
       if (result.rows[0]) created.push(result.rows[0]);
     }
@@ -377,7 +377,12 @@ app.post('/api/admin/students/csv', requireAuth, allowRoles('admin'), async (req
 app.get('/api/admin/instructors', requireAuth, allowRoles('admin'), async (_req, res, next) => {
   try {
     const result = await requirePool().query(
-      "SELECT id, full_name, email FROM users WHERE role = 'instructor' ORDER BY full_name",
+      `SELECT u.id, u.full_name, u.email, COUNT(s.id)::int AS subject_count
+       FROM users u
+       LEFT JOIN subjects s ON s.instructor_id = u.id
+       WHERE u.role = 'instructor'
+       GROUP BY u.id, u.full_name, u.email
+       ORDER BY u.full_name`,
     );
     return res.json({ instructors: result.rows });
   } catch (error) {

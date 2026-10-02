@@ -1,0 +1,3 @@
+ALTER TABLE users
+    ADD COLUMN program VARCHAR(255),
+    ADD COLUMN year_level VARCHAR(50);
