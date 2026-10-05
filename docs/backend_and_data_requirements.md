@@ -31,7 +31,7 @@
 | Table | Purpose | Key columns and rules |
 |---|---|---|
 | `users` | Accounts | `id_number` unique, not blank; `email` unique, not blank; `role` ∈ student, instructor, admin; `full_name` not blank |
-| `subjects` | A course section | `instructor_id` → users (cascade); `subject_code`, `subject_title`; `is_published` and `is_open` default **false**; `self_check_limit` default 3 |
+| `subjects` | A course section | `instructor_id` → users (cascade); `subject_code`, `subject_title`, `school_year` in `YYYY-YY` format, `semester` (`1st sem` or `2nd sem`); `is_published` and `is_open` default **false**; `self_check_limit` default 3 |
 | `enrollments` | Student ↔ subject | unique (`student_id`, `subject_id`); both cascade |
 | `assignments` | Work inside a subject | `subject_id` → subjects (cascade); `title` not blank; `instructions`; `due_at` (optional) |
 | `submissions` | One analysis run | `student_id` (cascade); `subject_id` and `assignment_id` (set null on delete); `source_type` ∈ git, upload; `language` ∈ c, javascript, python, php; `is_self_check`; `status` ∈ pending, processing, complete, failed |
@@ -58,6 +58,8 @@ Every table that hangs off `submissions` (fingerprints, signals, flags, scores, 
 | `009_provenance_flag_level.sql` | `provenance_flags.flag_level` (safe to re-run) |
 | `010_decision_note.sql` | `originality_decisions.note` |
 | `011_assignments.sql` | `assignments`, `submissions.assignment_id` |
+| `013_subject_school_year.sql` | `subjects.school_year` |
+| `014_subject_semester.sql` | `subjects.semester` |
 
 Rules:
 
@@ -88,7 +90,7 @@ All routes except health and login require `Authorization: Bearer <token>`. Erro
 | `GET /api/instructor/submissions/:id` | instructor | Full detail: `risk`, `peers` (matched students), `commit_signals`, `provenance_flags`, `decision`; 404 if not in an own subject |
 | `POST /api/instructor/submissions/:id/decision` | instructor | Upsert `{ decision, note? }`; 404 if not in an own subject |
 | `GET /api/admin/students`, `GET /api/admin/instructors` | admin | User lists for the enrollment screens |
-| `GET /api/admin/subjects`, `POST /api/admin/subjects` | admin | List subjects; create one for an instructor (`subject_code`, `subject_title`, `instructor_id`) |
+| `GET /api/admin/subjects`, `POST /api/admin/subjects` | admin | List subjects; create one for an instructor (`subject_code`, `subject_title`, `school_year`, `semester`, `instructor_id`) |
 | `POST /api/admin/subjects/:id/enrollments` | admin | Enroll `{ student_id }`; 409 if already enrolled |
 | `GET /api/admin/enrollments`, `GET /api/admin/subjects/:id/enrollments` | admin | Enrollment lists |
 | `DELETE /api/admin/enrollments/:id` | admin | Remove an enrollment (204) |

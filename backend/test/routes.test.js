@@ -37,3 +37,18 @@ test('student quota route accepts student tokens', async () => {
   assert.equal(response.status, 200);
   assert.deepEqual(response.body, { limit: 3, used: 0, remaining: 3, window: 'daily' });
 });
+
+test('admin subject creation requires a supported semester', async () => {
+  const response = await request(app)
+    .post('/api/admin/subjects')
+    .set('Authorization', `Bearer ${tokenFor('admin')}`)
+    .send({
+      subject_code: 'CS101',
+      subject_title: 'Introduction to Programming',
+      school_year: '2027-28',
+      semester: 'summer',
+      instructor_id: '00000000-0000-0000-0000-000000000000',
+    });
+  assert.equal(response.status, 400);
+  assert.match(response.body.error, /school_year/);
+});

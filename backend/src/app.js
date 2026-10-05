@@ -196,17 +196,17 @@ app.post('/api/instructor/submissions/:id/decision', requireAuth, allowRoles('in
 });
 
 app.post('/api/instructor/subjects', requireAuth, allowRoles('instructor'), async (req, res, next) => {
-  const { subject_code: code, subject_title: title, self_check_limit: limit } = req.body || {};
-  if (!code || !title) {
-    return res.status(400).json({ error: 'subject_code and subject_title are required' });
+  const { subject_code: code, subject_title: title, school_year: schoolYear, semester, self_check_limit: limit } = req.body || {};
+  if (!code || !title || !schoolYear || !/^\d{4}-\d{2}$/.test(schoolYear) || !['1st sem', '2nd sem'].includes(semester)) {
+    return res.status(400).json({ error: 'subject_code, subject_title, school_year (YYYY-YY), and semester (1st sem or 2nd sem) are required' });
   }
 
   try {
     const result = await requirePool().query(
-      `INSERT INTO subjects (instructor_id, subject_code, subject_title, self_check_limit)
-       VALUES ($1, $2, $3, COALESCE($4, 3))
-       RETURNING id, subject_code, subject_title, is_published, is_open, self_check_limit`,
-      [req.user.sub, code, title, limit ?? null],
+      `INSERT INTO subjects (instructor_id, subject_code, subject_title, school_year, semester, self_check_limit)
+       VALUES ($1, $2, $3, $4, $5, COALESCE($6, 3))
+       RETURNING id, subject_code, subject_title, school_year, semester, is_published, is_open, self_check_limit`,
+      [req.user.sub, code, title, schoolYear, semester, limit ?? null],
     );
     return res.status(201).json({ subject: result.rows[0] });
   } catch (error) {
@@ -217,7 +217,7 @@ app.post('/api/instructor/subjects', requireAuth, allowRoles('instructor'), asyn
 app.get('/api/instructor/subjects', requireAuth, allowRoles('instructor'), async (req, res, next) => {
   try {
     const result = await requirePool().query(
-      `SELECT s.id, s.subject_code, s.subject_title, s.is_published, s.is_open,
+      `SELECT s.id, s.subject_code, s.subject_title, s.school_year, s.semester, s.is_published, s.is_open,
               s.self_check_limit,
               count(e.id)::int AS enrolled_count
        FROM subjects s
@@ -393,7 +393,7 @@ app.get('/api/admin/instructors', requireAuth, allowRoles('admin'), async (_req,
 app.get('/api/admin/subjects', requireAuth, allowRoles('admin'), async (_req, res, next) => {
   try {
     const result = await requirePool().query(
-      `SELECT s.id, s.subject_code, s.subject_title, u.full_name AS instructor
+      `SELECT s.id, s.subject_code, s.subject_title, s.school_year, s.semester, u.full_name AS instructor
        FROM subjects s
        JOIN users u ON u.id = s.instructor_id
        ORDER BY s.subject_code`,
@@ -405,19 +405,19 @@ app.get('/api/admin/subjects', requireAuth, allowRoles('admin'), async (_req, re
 });
 
 app.post('/api/admin/subjects', requireAuth, allowRoles('admin'), async (req, res, next) => {
-  const { subject_code: code, subject_title: title, instructor_id: instructorId } = req.body || {};
-  if (!code || !title || !instructorId) {
-    return res.status(400).json({ error: 'subject_code, subject_title, and instructor_id are required' });
+  const { subject_code: code, subject_title: title, school_year: schoolYear, semester, instructor_id: instructorId } = req.body || {};
+  if (!code || !title || !schoolYear || !/^\d{4}-\d{2}$/.test(schoolYear) || !['1st sem', '2nd sem'].includes(semester) || !instructorId) {
+    return res.status(400).json({ error: 'subject_code, subject_title, school_year (YYYY-YY), semester (1st sem or 2nd sem), and instructor_id are required' });
   }
 
   try {
     const result = await requirePool().query(
-      `INSERT INTO subjects (instructor_id, subject_code, subject_title)
-       SELECT id, $2, $3
+      `INSERT INTO subjects (instructor_id, subject_code, subject_title, school_year, semester)
+       SELECT id, $2, $3, $4, $5
        FROM users
        WHERE id = $1 AND role = 'instructor'
-       RETURNING id, subject_code, subject_title, instructor_id, is_published, is_open, self_check_limit`,
-      [instructorId, code, title],
+       RETURNING id, subject_code, subject_title, school_year, semester, instructor_id, is_published, is_open, self_check_limit`,
+      [instructorId, code, title, schoolYear, semester],
     );
     if (!result.rows[0]) return res.status(400).json({ error: 'Instructor not found' });
     return res.status(201).json({ subject: result.rows[0] });

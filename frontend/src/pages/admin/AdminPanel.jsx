@@ -16,6 +16,8 @@ export default function AdminPanel() {
   const [yearLevelFilter, setYearLevelFilter] = useState('');
   const [subjectCode, setSubjectCode] = useState('');
   const [subjectTitle, setSubjectTitle] = useState('');
+  const [schoolYear, setSchoolYear] = useState('');
+  const [semester, setSemester] = useState('');
   const [activeTab, setActiveTab] = useState('enrollments');
 
   const [loading, setLoading] = useState(true);
@@ -49,7 +51,7 @@ export default function AdminPanel() {
 
   async function handleCreateSubject(e) {
     e.preventDefault();
-    if (!subjectCode || !subjectTitle || !selectedInstructor) return;
+    if (!subjectCode || !subjectTitle || !schoolYear || !semester || !selectedInstructor) return;
 
     setError('');
     setSuccess('');
@@ -59,11 +61,15 @@ export default function AdminPanel() {
       const res = await api.post('/admin/subjects', {
         subject_code: subjectCode,
         subject_title: subjectTitle,
+        school_year: schoolYear,
+        semester,
         instructor_id: selectedInstructor,
       });
       setSubjects((prev) => [...prev, res.data.subject]);
       setSubjectCode('');
       setSubjectTitle('');
+      setSchoolYear('');
+      setSemester('');
       setSelectedInstructor('');
       setSuccess('Subject created and assigned to the instructor.');
     } catch (err) {
@@ -261,6 +267,8 @@ export default function AdminPanel() {
                   <tr className="bg-surface-container-low border-b border-border-standard">
                     <th className="text-left px-4 py-2 font-semibold text-slate-text-muted">Subject code</th>
                     <th className="text-left px-4 py-2 font-semibold text-slate-text-muted">Title</th>
+                    <th className="text-left px-4 py-2 font-semibold text-slate-text-muted">School year</th>
+                    <th className="text-left px-4 py-2 font-semibold text-slate-text-muted">Semester</th>
                     <th className="text-left px-4 py-2 font-semibold text-slate-text-muted">Instructor</th>
                   </tr>
                 </thead>
@@ -269,6 +277,8 @@ export default function AdminPanel() {
                     <tr key={subject.id}>
                       <td className="px-4 py-2">{subject.subject_code}</td>
                       <td className="px-4 py-2">{subject.subject_title}</td>
+                      <td className="px-4 py-2">{subject.school_year || '—'}</td>
+                      <td className="px-4 py-2">{subject.semester || '—'}</td>
                       <td className="px-4 py-2">{subject.instructor || '—'}</td>
                     </tr>
                   ))}
@@ -333,6 +343,28 @@ export default function AdminPanel() {
             disabled={submitting || loading}
             className="w-full border border-border-standard rounded-lg px-3 py-2 text-sm"
           />
+          <input
+            type="text"
+            placeholder="School year (e.g. 2027-28)"
+            value={schoolYear}
+            onChange={(e) => setSchoolYear(e.target.value)}
+            pattern="[0-9]{4}-[0-9]{2}"
+            title="Use the format YYYY-YY, for example 2027-28"
+            required
+            disabled={submitting || loading}
+            className="w-full border border-border-standard rounded-lg px-3 py-2 text-sm"
+          />
+          <select
+            value={semester}
+            onChange={(e) => setSemester(e.target.value)}
+            required
+            disabled={submitting || loading}
+            className="w-full border border-border-standard rounded-lg px-3 py-2 text-sm"
+          >
+            <option value="">-- Select semester --</option>
+            <option value="1st sem">1st sem</option>
+            <option value="2nd sem">2nd sem</option>
+          </select>
           <select
             value={selectedInstructor}
             onChange={(e) => setSelectedInstructor(e.target.value)}
