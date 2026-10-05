@@ -411,7 +411,7 @@ export default function InstructorDashboard() {
                           <h4>Peer overlaps</h4>
                           <p>
                             {detailData?.peerOverlaps ||
-                              `Matched against ${detailData?.peers?.length || 0} peer submission(s)${detailData?.peers?.length ? `: ${[...new Set(detailData.peers.map((peer) => peer.peer_student))].join(', ')}` : ''}.`}
+                              `Compared Against ${detailData?.peers?.length || 0} peer submission(s)${detailData?.peers?.length ? `: ${[...new Set(detailData.peers.map((peer) => peer.peer_student))].join(', ')}` : ''}.`}
                           </p>
                         </div>
 
