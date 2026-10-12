@@ -260,6 +260,71 @@ export default function AdminPanel() {
 
         {activeTab === 'subjects' && (
           <section>
+            <form onSubmit={handleCreateSubject} className="bg-white border border-border-standard rounded-xl p-5 mb-6 shadow-sm space-y-3">
+              <h3 className="font-bold text-sm">Create subject</h3>
+              <input
+                type="text"
+                placeholder="Subject code (e.g. CS101)"
+                value={subjectCode}
+                onChange={(e) => setSubjectCode(e.target.value)}
+                required
+                disabled={submitting || loading}
+                className="w-full border border-border-standard rounded-lg px-3 py-2 text-sm"
+              />
+              <input
+                type="text"
+                placeholder="Subject title"
+                value={subjectTitle}
+                onChange={(e) => setSubjectTitle(e.target.value)}
+                required
+                disabled={submitting || loading}
+                className="w-full border border-border-standard rounded-lg px-3 py-2 text-sm"
+              />
+              <input
+                type="text"
+                placeholder="School year (e.g. 2027-28)"
+                value={schoolYear}
+                onChange={(e) => setSchoolYear(e.target.value)}
+                pattern="[0-9]{4}-[0-9]{2}"
+                title="Use the format YYYY-YY, for example 2027-28"
+                required
+                disabled={submitting || loading}
+                className="w-full border border-border-standard rounded-lg px-3 py-2 text-sm"
+              />
+              <select
+                value={semester}
+                onChange={(e) => setSemester(e.target.value)}
+                required
+                disabled={submitting || loading}
+                className="w-full border border-border-standard rounded-lg px-3 py-2 text-sm"
+              >
+                <option value="">-- Select semester --</option>
+                <option value="1st sem">1st sem</option>
+                <option value="2nd sem">2nd sem</option>
+              </select>
+              <select
+                value={selectedInstructor}
+                onChange={(e) => setSelectedInstructor(e.target.value)}
+                required
+                disabled={submitting || loading}
+                className="w-full border border-border-standard rounded-lg px-3 py-2 text-sm"
+              >
+                <option value="">-- Assign instructor --</option>
+                {instructors.map((instructor) => (
+                  <option key={instructor.id} value={instructor.id}>
+                    {instructor.full_name} ({instructor.email})
+                  </option>
+                ))}
+              </select>
+              <button
+                type="submit"
+                disabled={submitting || loading}
+                className="w-full bg-secondary text-white py-2.5 rounded-lg text-sm font-bold hover:opacity-90 transition disabled:opacity-50"
+              >
+                {submitting ? 'Creating…' : 'Create subject'}
+              </button>
+            </form>
+
             <h3 className="font-bold text-sm mb-4">Subjects</h3>
             <div className="bg-white border border-border-standard rounded-xl overflow-hidden shadow-sm">
               <table className="w-full text-sm">
@@ -322,73 +387,7 @@ export default function AdminPanel() {
 
         {activeTab === 'enrollments' && (
           <section>
-
-        <form onSubmit={handleCreateSubject} className="bg-white border border-border-standard rounded-xl p-5 mb-6 shadow-sm space-y-3">
-          <h3 className="font-bold text-sm">Create subject</h3>
-          <input
-            type="text"
-            placeholder="Subject code (e.g. CS101)"
-            value={subjectCode}
-            onChange={(e) => setSubjectCode(e.target.value)}
-            required
-            disabled={submitting || loading}
-            className="w-full border border-border-standard rounded-lg px-3 py-2 text-sm"
-          />
-          <input
-            type="text"
-            placeholder="Subject title"
-            value={subjectTitle}
-            onChange={(e) => setSubjectTitle(e.target.value)}
-            required
-            disabled={submitting || loading}
-            className="w-full border border-border-standard rounded-lg px-3 py-2 text-sm"
-          />
-          <input
-            type="text"
-            placeholder="School year (e.g. 2027-28)"
-            value={schoolYear}
-            onChange={(e) => setSchoolYear(e.target.value)}
-            pattern="[0-9]{4}-[0-9]{2}"
-            title="Use the format YYYY-YY, for example 2027-28"
-            required
-            disabled={submitting || loading}
-            className="w-full border border-border-standard rounded-lg px-3 py-2 text-sm"
-          />
-          <select
-            value={semester}
-            onChange={(e) => setSemester(e.target.value)}
-            required
-            disabled={submitting || loading}
-            className="w-full border border-border-standard rounded-lg px-3 py-2 text-sm"
-          >
-            <option value="">-- Select semester --</option>
-            <option value="1st sem">1st sem</option>
-            <option value="2nd sem">2nd sem</option>
-          </select>
-          <select
-            value={selectedInstructor}
-            onChange={(e) => setSelectedInstructor(e.target.value)}
-            required
-            disabled={submitting || loading}
-            className="w-full border border-border-standard rounded-lg px-3 py-2 text-sm"
-          >
-            <option value="">-- Assign instructor --</option>
-            {instructors.map((instructor) => (
-              <option key={instructor.id} value={instructor.id}>
-                {instructor.full_name} ({instructor.email})
-              </option>
-            ))}
-          </select>
-          <button
-            type="submit"
-            disabled={submitting || loading}
-            className="w-full bg-secondary text-white py-2.5 rounded-lg text-sm font-bold hover:opacity-90 transition disabled:opacity-50"
-          >
-            {submitting ? 'Creating…' : 'Create subject'}
-          </button>
-        </form>
-
-        <form onSubmit={handleEnroll} className="bg-white border border-border-standard rounded-xl p-5 mb-6 shadow-sm space-y-3">
+            <form onSubmit={handleEnroll} className="bg-white border border-border-standard rounded-xl p-5 mb-6 shadow-sm space-y-3">
           <h3 className="font-bold text-sm">Enroll student</h3>
           <div>
             <label htmlFor="subject-select" className="text-xs font-semibold text-slate-text-secondary block mb-1">
