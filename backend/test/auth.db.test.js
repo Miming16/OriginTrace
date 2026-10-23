@@ -113,6 +113,68 @@ test('GET /api/instructor/submissions is 200 with an empty list on a fresh datab
   assert.deepEqual(response.body.submissions, []);
 });
 
+test('admin CSV re-import updates existing student program and year level', { skip }, async () => {
+  const token = await tokenFor('admin');
+  const suffix = crypto.randomUUID().replaceAll('-', '');
+  const email = `csv-import-${suffix}@origintrace.test`;
+  const idNumber = suffix.slice(0, 10);
+  const importStudents = (program, yearLevel) => request(app)
+    .post('/api/admin/students/csv')
+    .set('Authorization', `Bearer ${token}`)
+    .send({
+      students: [{
+        id_number: idNumber,
+        full_name: 'CSV Import Probe',
+        email,
+        program,
+        year_level: yearLevel,
+      }],
+    });
+
+  try {
+    const firstImport = await importStudents('BS Computer Science', '2nd Year');
+    assert.equal(firstImport.status, 201);
+    assert.equal(firstImport.body.count, 1);
+    assert.equal(firstImport.body.updated_count, 0);
+
+    const secondImport = await importStudents('BS Software Engineering', '3rd Year');
+    assert.equal(secondImport.status, 201);
+    assert.equal(secondImport.body.count, 0);
+    assert.equal(secondImport.body.updated_count, 1);
+
+    const conflictingId = await request(app)
+      .post('/api/admin/students/csv')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ students: [{
+        id_number: idNumber,
+        full_name: 'Different Person',
+        email: `different-${suffix}@origintrace.test`,
+      }] });
+    assert.equal(conflictingId.status, 201);
+    assert.equal(conflictingId.body.count, 0);
+    assert.equal(conflictingId.body.skipped_count, 1);
+
+    const { rows } = await pool.query(
+      'SELECT program, year_level FROM users WHERE email = $1',
+      [email],
+    );
+    assert.deepEqual(rows, [{ program: 'BS Software Engineering', year_level: '3rd Year' }]);
+
+    const duplicateInFile = await request(app)
+      .post('/api/admin/students/csv')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ students: [
+        { id_number: `${idNumber.slice(0, 9)}1`, full_name: 'First Row', email: `first-${suffix}@origintrace.test` },
+        { id_number: `${idNumber.slice(0, 9)}1`, full_name: 'Duplicate Row', email: `duplicate-${suffix}@origintrace.test` },
+      ] });
+    assert.equal(duplicateInFile.status, 201);
+    assert.equal(duplicateInFile.body.count, 1);
+    assert.equal(duplicateInFile.body.skipped_count, 1);
+  } finally {
+    await pool.query('DELETE FROM users WHERE email LIKE $1', [`%${suffix}@origintrace.test`]);
+  }
+});
+
 test('WBS 1.2.1: twenty concurrent /api/me requests all succeed on the pool', { skip }, async () => {
   const token = await tokenFor('student');
   const responses = await Promise.all(

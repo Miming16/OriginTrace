@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import Papa from 'papaparse';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../api/axios';
 
@@ -124,16 +125,35 @@ export default function AdminPanel() {
     setSubmitting(true);
     try {
       const text = await file.text();
-      const lines = text.split(/\r?\n/).filter((line) => line.trim());
-      const studentsToImport = lines.slice(1).map((line) => {
-        const [id_number, full_name, email, program, year_level] = line.split(',').map((value) => value.trim());
-        return { id_number, full_name, email, program, year_level };
+      const parsed = Papa.parse(text, {
+        header: true,
+        skipEmptyLines: 'greedy',
+        transformHeader: (header) => header.trim().toLowerCase(),
       });
+      if (parsed.errors.length) throw new Error(parsed.errors[0].message);
+
+      const requiredHeaders = ['id_number', 'full_name', 'email'];
+      const missingHeaders = requiredHeaders.filter((header) => !parsed.meta.fields?.includes(header));
+      if (missingHeaders.length) {
+        throw new Error(`CSV is missing required columns: ${missingHeaders.join(', ')}`);
+      }
+
+      const studentsToImport = parsed.data.map((row) => Object.fromEntries(
+        Object.entries(row).map(([key, value]) => [key, value.trim()]),
+      ));
+      if (!studentsToImport.length) throw new Error('CSV contains no student rows.');
+
       const response = await api.post('/admin/students/csv', { students: studentsToImport });
       await fetchInitialData();
-      setSuccess(`${response.data.count} student${response.data.count === 1 ? '' : 's'} imported successfully.`);
+      const { count, updated_count: updatedCount, unchanged_count: unchangedCount, skipped_count: skippedCount } = response.data;
+      setSuccess(`${count} added, ${updatedCount} updated, ${unchangedCount} unchanged, ${skippedCount} skipped.`);
+      const skippedRows = response.data.skipped || [];
+      setError(skippedRows.length
+        ? skippedRows.slice(0, 5).map((row) => `Row ${row.row}: ${row.reason}`).join(' | ')
+          + (skippedRows.length > 5 ? ` | and ${skippedRows.length - 5} more` : '')
+        : '');
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to import students.');
+      setError(err.response?.data?.error || err.message || 'Failed to import students.');
     } finally {
       setSubmitting(false);
       e.target.value = '';
