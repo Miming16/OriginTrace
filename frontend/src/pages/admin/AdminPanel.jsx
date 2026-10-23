@@ -116,7 +116,7 @@ export default function AdminPanel() {
     }
   }
 
-  async function handleCSVUpload(e) {
+  async function handleCSVUpload(e, accountType) {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -138,22 +138,24 @@ export default function AdminPanel() {
         throw new Error(`CSV is missing required columns: ${missingHeaders.join(', ')}`);
       }
 
-      const studentsToImport = parsed.data.map((row) => Object.fromEntries(
+      const accountsToImport = parsed.data.map((row) => Object.fromEntries(
         Object.entries(row).map(([key, value]) => [key, value.trim()]),
       ));
-      if (!studentsToImport.length) throw new Error('CSV contains no student rows.');
+      if (!accountsToImport.length) throw new Error('CSV contains no account rows.');
 
-      const response = await api.post('/admin/students/csv', { students: studentsToImport });
+      const collection = accountType === 'faculty' ? 'instructors' : 'students';
+      const response = await api.post(`/admin/${collection}/csv`, { [collection]: accountsToImport });
       await fetchInitialData();
       const { count, updated_count: updatedCount, unchanged_count: unchangedCount, skipped_count: skippedCount } = response.data;
-      setSuccess(`${count} added, ${updatedCount} updated, ${unchangedCount} unchanged, ${skippedCount} skipped.`);
+      const label = accountType === 'faculty' ? 'Faculty' : 'Students';
+      setSuccess(`${label}: ${count} added, ${updatedCount} updated, ${unchangedCount} unchanged, ${skippedCount} skipped.`);
       const skippedRows = response.data.skipped || [];
       setError(skippedRows.length
         ? skippedRows.slice(0, 5).map((row) => `Row ${row.row}: ${row.reason}`).join(' | ')
           + (skippedRows.length > 5 ? ` | and ${skippedRows.length - 5} more` : '')
         : '');
     } catch (err) {
-      setError(err.response?.data?.error || err.message || 'Failed to import students.');
+      setError(err.response?.data?.error || err.message || `Failed to import ${accountType}.`);
     } finally {
       setSubmitting(false);
       e.target.value = '';
@@ -221,7 +223,7 @@ export default function AdminPanel() {
               <h3 className="font-bold text-sm">Students</h3>
               <label className="bg-secondary text-white px-4 py-2 rounded-lg text-sm font-bold cursor-pointer hover:opacity-90">
                 Import CSV
-                <input type="file" accept=".csv" onChange={handleCSVUpload} disabled={submitting || loading} className="hidden" />
+                <input type="file" accept=".csv" onChange={(event) => handleCSVUpload(event, 'students')} disabled={submitting || loading} className="hidden" />
               </label>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
@@ -376,7 +378,13 @@ export default function AdminPanel() {
 
         {activeTab === 'faculty' && (
           <section>
-            <h3 className="font-bold text-sm mb-4">Faculty</h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold text-sm">Faculty</h3>
+              <label className="bg-secondary text-white px-4 py-2 rounded-lg text-sm font-bold cursor-pointer hover:opacity-90">
+                Import CSV
+                <input type="file" accept=".csv" onChange={(event) => handleCSVUpload(event, 'faculty')} disabled={submitting || loading} className="hidden" />
+              </label>
+            </div>
             {loading ? (
               <p className="text-sm text-slate-text-muted">Loading faculty…</p>
             ) : (

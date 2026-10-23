@@ -175,6 +175,53 @@ test('admin CSV re-import updates existing student program and year level', { sk
   }
 });
 
+test('admin CSV import creates and updates faculty without duplicating other accounts', { skip }, async () => {
+  const token = await tokenFor('admin');
+  const suffix = crypto.randomUUID().replaceAll('-', '');
+  const email = `csv-faculty-${suffix}@origintrace.test`;
+  const idNumber = suffix.slice(0, 10);
+  const importFaculty = (fullName, facultyEmail = email) => request(app)
+    .post('/api/admin/instructors/csv')
+    .set('Authorization', `Bearer ${token}`)
+    .send({ instructors: [{ id_number: idNumber, full_name: fullName, email: facultyEmail }] });
+
+  try {
+    const firstImport = await importFaculty('CSV Faculty Probe');
+    assert.equal(firstImport.status, 201);
+    assert.equal(firstImport.body.count, 1);
+
+    const updatedImport = await importFaculty('Updated CSV Faculty Probe');
+    assert.equal(updatedImport.body.count, 0);
+    assert.equal(updatedImport.body.updated_count, 1);
+
+    const unchangedImport = await importFaculty('Updated CSV Faculty Probe');
+    assert.equal(unchangedImport.body.unchanged_count, 1);
+
+    const conflictingId = await importFaculty('Different Faculty', `csv-faculty-${suffix}-conflict@origintrace.test`);
+    assert.equal(conflictingId.body.count, 0);
+    assert.equal(conflictingId.body.skipped_count, 1);
+
+    const studentCollision = await request(app)
+      .post('/api/admin/instructors/csv')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ instructors: [{
+        id_number: SEED.student.id_number,
+        full_name: 'Do Not Replace Student',
+        email: `csv-faculty-${suffix}-student-collision@origintrace.test`,
+      }] });
+    assert.equal(studentCollision.body.count, 0);
+    assert.equal(studentCollision.body.skipped_count, 1);
+
+    const { rows } = await pool.query(
+      'SELECT full_name, role FROM users WHERE email = $1',
+      [email],
+    );
+    assert.deepEqual(rows, [{ full_name: 'Updated CSV Faculty Probe', role: 'instructor' }]);
+  } finally {
+    await pool.query('DELETE FROM users WHERE email LIKE $1', [`csv-faculty-${suffix}%`]);
+  }
+});
+
 test('WBS 1.2.1: twenty concurrent /api/me requests all succeed on the pool', { skip }, async () => {
   const token = await tokenFor('student');
   const responses = await Promise.all(

@@ -336,6 +336,121 @@ app.get('/api/student/subjects/:id/assignments', requireAuth, allowRoles('studen
   }
 });
 
+async function importUsersFromCsv(rows, role) {
+  const created = [];
+  const updated = [];
+  const unchanged = [];
+  const skipped = [];
+  const seenIds = new Set();
+  const seenEmails = new Set();
+  const pool = requirePool();
+
+  for (const [index, account] of rows.entries()) {
+    const { id_number: idNumber, full_name: fullName, email, program, year_level: yearLevel } = account || {};
+    const normalizedId = typeof idNumber === 'string' || typeof idNumber === 'number' ? String(idNumber).trim() : '';
+    const normalizedName = typeof fullName === 'string' ? fullName.trim() : '';
+    const normalizedEmail = typeof email === 'string' ? email.trim() : '';
+    const normalizedEmailKey = normalizedEmail.toLowerCase();
+    const normalizedProgram = role === 'student' && typeof program === 'string' ? program.trim() || null : null;
+    const normalizedYearLevel = role === 'student' && typeof yearLevel === 'string' ? yearLevel.trim() || null : null;
+    const row = index + 2;
+
+    const validationErrors = [];
+    if (!normalizedId) validationErrors.push('ID number is required');
+    else if (normalizedId.length > 20) validationErrors.push('ID number must be 20 characters or fewer');
+    if (!normalizedName) validationErrors.push('Full name is required');
+    else if (normalizedName.length > 255) validationErrors.push('Full name must be 255 characters or fewer');
+    if (!normalizedEmail) validationErrors.push('Email is required');
+    else if (normalizedEmail.length > 255 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      validationErrors.push('Email must be a valid address of 255 characters or fewer');
+    }
+    if (normalizedProgram && normalizedProgram.length > 255) validationErrors.push('Program must be 255 characters or fewer');
+    if (normalizedYearLevel && normalizedYearLevel.length > 50) validationErrors.push('Year level must be 50 characters or fewer');
+    if (validationErrors.length) {
+      skipped.push({ row, id_number: normalizedId || null, email: normalizedEmail || null, reason: validationErrors.join('; ') });
+      continue;
+    }
+
+    if (seenIds.has(normalizedId) || seenEmails.has(normalizedEmailKey)) {
+      skipped.push({ row, id_number: normalizedId, email: normalizedEmail, reason: 'Duplicate ID number or email in this CSV' });
+      continue;
+    }
+    seenIds.add(normalizedId);
+    seenEmails.add(normalizedEmailKey);
+
+    const existing = await pool.query(
+      `SELECT id_number, email, role, full_name, program, year_level
+       FROM users
+       WHERE id_number = $1 OR lower(email) = lower($2)
+       LIMIT 1`,
+      [normalizedId, normalizedEmail],
+    );
+    if (existing.rows[0]) {
+      const match = existing.rows[0];
+      if (match.role !== role
+        || match.id_number !== normalizedId
+        || match.email.toLowerCase() !== normalizedEmailKey) {
+        const reason = match.id_number === normalizedId
+          ? 'ID number already belongs to a different account'
+          : 'Email already belongs to a different account';
+        skipped.push({ row, id_number: normalizedId, email: normalizedEmail, reason });
+        continue;
+      }
+
+      if (role === 'student') {
+        const nextProgram = normalizedProgram || match.program;
+        const nextYearLevel = normalizedYearLevel || match.year_level;
+        if (nextProgram === match.program && nextYearLevel === match.year_level) {
+          unchanged.push({ id_number: normalizedId, email: normalizedEmail });
+          continue;
+        }
+        const result = await pool.query(
+          `UPDATE users
+           SET program = $2, year_level = $3
+           WHERE id_number = $1 AND role = $4
+           RETURNING id, id_number, full_name, email, role, program, year_level`,
+          [normalizedId, nextProgram, nextYearLevel, role],
+        );
+        if (result.rows[0]) updated.push(result.rows[0]);
+      } else if (match.full_name === normalizedName) {
+        unchanged.push({ id_number: normalizedId, email: normalizedEmail });
+      } else {
+        const result = await pool.query(
+          `UPDATE users
+           SET full_name = $2
+           WHERE id_number = $1 AND role = $3
+           RETURNING id, id_number, full_name, email, role`,
+          [normalizedId, normalizedName, role],
+        );
+        if (result.rows[0]) updated.push(result.rows[0]);
+      }
+      continue;
+    }
+
+    const passwordHash = await bcrypt.hash('Passw0rd!', 10);
+    const result = await pool.query(
+      `INSERT INTO users (id_number, full_name, email, password_hash, role, program, year_level)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       ON CONFLICT DO NOTHING
+       RETURNING id, id_number, full_name, email, role, program, year_level`,
+      [normalizedId, normalizedName, normalizedEmail, passwordHash, role, normalizedProgram, normalizedYearLevel],
+    );
+    if (result.rows[0]) created.push(result.rows[0]);
+    else skipped.push({ row, id_number: normalizedId, email: normalizedEmail, reason: 'ID number or email already exists' });
+  }
+
+  return {
+    created,
+    updated,
+    unchanged,
+    skipped,
+    count: created.length,
+    updated_count: updated.length,
+    unchanged_count: unchanged.length,
+    skipped_count: skipped.length,
+  };
+}
+
 app.get('/api/admin/students', requireAuth, allowRoles('admin'), async (_req, res, next) => {
   try {
     const result = await requirePool().query(
@@ -352,106 +467,18 @@ app.post('/api/admin/students/csv', requireAuth, allowRoles('admin'), async (req
   if (!students) return res.status(400).json({ error: 'students must be an array' });
 
   try {
-    const created = [];
-    const updated = [];
-    const unchanged = [];
-    const skipped = [];
-    const seenIds = new Set();
-    const seenEmails = new Set();
-    const pool = requirePool();
+    return res.status(201).json(await importUsersFromCsv(students, 'student'));
+  } catch (error) {
+    return next(error);
+  }
+});
 
-    for (const [index, student] of students.entries()) {
-      const { id_number: idNumber, full_name: fullName, email, program, year_level: yearLevel } = student || {};
-      const normalizedId = typeof idNumber === 'string' || typeof idNumber === 'number' ? String(idNumber).trim() : '';
-      const normalizedName = typeof fullName === 'string' ? fullName.trim() : '';
-      const normalizedEmail = typeof email === 'string' ? email.trim() : '';
-      const normalizedEmailKey = normalizedEmail.toLowerCase();
-      const normalizedProgram = typeof program === 'string' ? program.trim() || null : null;
-      const normalizedYearLevel = typeof yearLevel === 'string' ? yearLevel.trim() || null : null;
-      const row = index + 2;
+app.post('/api/admin/instructors/csv', requireAuth, allowRoles('admin'), async (req, res, next) => {
+  const instructors = Array.isArray(req.body?.instructors) ? req.body.instructors : null;
+  if (!instructors) return res.status(400).json({ error: 'instructors must be an array' });
 
-      const validationErrors = [];
-      if (!normalizedId) validationErrors.push('ID number is required');
-      else if (normalizedId.length > 20) validationErrors.push('ID number must be 20 characters or fewer');
-      if (!normalizedName) validationErrors.push('Full name is required');
-      else if (normalizedName.length > 255) validationErrors.push('Full name must be 255 characters or fewer');
-      if (!normalizedEmail) validationErrors.push('Email is required');
-      else if (normalizedEmail.length > 255 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
-        validationErrors.push('Email must be a valid address of 255 characters or fewer');
-      }
-      if (normalizedProgram && normalizedProgram.length > 255) validationErrors.push('Program must be 255 characters or fewer');
-      if (normalizedYearLevel && normalizedYearLevel.length > 50) validationErrors.push('Year level must be 50 characters or fewer');
-      if (validationErrors.length) {
-        skipped.push({ row, id_number: normalizedId || null, email: normalizedEmail || null, reason: validationErrors.join('; ') });
-        continue;
-      }
-
-      if (seenIds.has(normalizedId) || seenEmails.has(normalizedEmailKey)) {
-        skipped.push({ row, id_number: normalizedId, email: normalizedEmail, reason: 'Duplicate ID number or email in this CSV' });
-        continue;
-      }
-      seenIds.add(normalizedId);
-      seenEmails.add(normalizedEmailKey);
-
-      const existing = await pool.query(
-        `SELECT id_number, email, role, program, year_level
-         FROM users
-         WHERE id_number = $1 OR lower(email) = lower($2)
-         LIMIT 1`,
-        [normalizedId, normalizedEmail],
-      );
-      if (existing.rows[0]) {
-        const match = existing.rows[0];
-        if (match.role !== 'student'
-          || match.id_number !== normalizedId
-          || match.email.toLowerCase() !== normalizedEmailKey) {
-          const reason = match.id_number === normalizedId
-            ? 'ID number already belongs to a different account'
-            : 'Email already belongs to a different account';
-          skipped.push({ row, id_number: normalizedId, email: normalizedEmail, reason });
-          continue;
-        }
-
-        const nextProgram = normalizedProgram || match.program;
-        const nextYearLevel = normalizedYearLevel || match.year_level;
-        if (nextProgram === match.program && nextYearLevel === match.year_level) {
-          unchanged.push({ id_number: normalizedId, email: normalizedEmail });
-          continue;
-        }
-
-        const result = await pool.query(
-          `UPDATE users
-           SET program = $2, year_level = $3
-           WHERE id_number = $1 AND role = 'student'
-           RETURNING id, id_number, full_name, email, role, program, year_level`,
-          [normalizedId, nextProgram, nextYearLevel],
-        );
-        if (result.rows[0]) updated.push(result.rows[0]);
-        continue;
-      }
-
-      const passwordHash = await bcrypt.hash('Passw0rd!', 10);
-      const result = await pool.query(
-        `INSERT INTO users (id_number, full_name, email, password_hash, role, program, year_level)
-         VALUES ($1, $2, $3, $4, 'student', $5, $6)
-         ON CONFLICT DO NOTHING
-         RETURNING id, id_number, full_name, email, role, program, year_level`,
-        [normalizedId, normalizedName, normalizedEmail, passwordHash, normalizedProgram, normalizedYearLevel],
-      );
-      if (result.rows[0]) created.push(result.rows[0]);
-      else skipped.push({ row, id_number: normalizedId, email: normalizedEmail, reason: 'ID number or email already exists' });
-    }
-
-    return res.status(201).json({
-      created,
-      updated,
-      unchanged,
-      skipped,
-      count: created.length,
-      updated_count: updated.length,
-      unchanged_count: unchanged.length,
-      skipped_count: skipped.length,
-    });
+  try {
+    return res.status(201).json(await importUsersFromCsv(instructors, 'instructor'));
   } catch (error) {
     return next(error);
   }
