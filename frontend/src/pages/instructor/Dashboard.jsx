@@ -171,9 +171,9 @@ export default function InstructorDashboard() {
 
   const kpis = [
     { label: 'Total submissions', value: submissions.length, badge: 'dashboard' },
-    { label: 'High risk', value: highCount, badge: 'error' },
-    { label: 'Medium risk', value: mediumCount, badge: 'warning' },
-    { label: 'Low risk', value: lowCount, badge: 'check_circle' },
+    { label: 'High risk', value: highCount, badge: 'error', risk: 'risk-high' },
+    { label: 'Medium risk', value: mediumCount, badge: 'warning', risk: 'risk-medium' },
+    { label: 'Low risk', value: lowCount, badge: 'check_circle', risk: 'risk-low' },
   ];
 
   const selectedCourseRequests = selectedCourse
@@ -326,7 +326,7 @@ export default function InstructorDashboard() {
 
               <div className="stats-grid">
                 {kpis.map((stat) => (
-                  <div key={stat.label} className="stat-card">
+                  <div key={stat.label} className={`stat-card ${stat.risk || ''}`}>
                     <div className="stat-topline">
                       <span className="material-symbols-outlined">{stat.badge}</span>
                       <span>{stat.label}</span>

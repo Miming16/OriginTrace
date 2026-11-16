@@ -553,6 +553,13 @@ button {
   font-weight: 800;
 }
 
+.stat-card.risk-high { border-top: 3px solid #c81f1f; }
+.stat-card.risk-high .stat-topline, .stat-card.risk-high h3 { color: #c81f1f; }
+.stat-card.risk-medium { border-top: 3px solid #b76a00; }
+.stat-card.risk-medium .stat-topline, .stat-card.risk-medium h3 { color: #b76a00; }
+.stat-card.risk-low { border-top: 3px solid #0d8a4d; }
+.stat-card.risk-low .stat-topline, .stat-card.risk-low h3 { color: #0d8a4d; }
+
 .student-dashboard-stats {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
