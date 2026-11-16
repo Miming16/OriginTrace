@@ -20,6 +20,7 @@ export default function AdminPanel() {
   const [schoolYear, setSchoolYear] = useState('');
   const [semester, setSemester] = useState('');
   const [activeTab, setActiveTab] = useState('enrollments');
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -170,33 +171,42 @@ export default function AdminPanel() {
   ));
 
   return (
-    <div className="flex min-h-screen bg-background text-primary">
-      <aside className="w-52 shrink-0 bg-white border-r border-border-standard p-4 flex flex-col">
-        <div className="flex items-center gap-2 font-bold text-lg mb-8">
+    <div className={`admin-layout flex min-h-screen bg-background text-primary ${isSidebarCollapsed ? 'admin-sidebar-collapsed' : ''}`}>
+      <aside className="admin-sidebar w-52 shrink-0 bg-white border-r border-border-standard p-4 flex flex-col">
+        <button
+          type="button"
+          className="admin-brand flex items-center gap-2 font-bold text-lg mb-8"
+          onClick={() => setIsSidebarCollapsed((value) => !value)}
+          aria-label={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          title={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        >
           <img src="/origintrace-logo-home.png" alt="OriginTrace logo" className="brand-logo mini-logo" />
-          <span>OriginTrace</span>
-        </div>
+          <span className="admin-sidebar-label">OriginTrace</span>
+        </button>
         <nav className="space-y-1" aria-label="Admin sections">
           {[
-            ['students', 'Students'],
-            ['faculty', 'Faculty'],
-            ['subjects', 'Subjects'],
-            ['enrollments', 'Enrollments'],
-          ].map(([tab, label]) => (
+            ['students', 'Students', 'groups'],
+            ['faculty', 'Faculty', 'school'],
+            ['subjects', 'Subjects', 'menu_book'],
+            ['enrollments', 'Enrollments', 'how_to_reg'],
+          ].map(([tab, label, icon]) => (
             <button
               key={tab}
               type="button"
               onClick={() => setActiveTab(tab)}
-              className={`w-full text-left px-3 py-2 rounded-lg text-sm font-semibold ${activeTab === tab ? 'bg-secondary text-white' : 'text-slate-text-secondary hover:bg-surface-container-low'}`}
+              className={`admin-nav-item w-full text-left px-3 py-2 rounded-lg text-sm font-semibold ${activeTab === tab ? 'bg-secondary text-white' : 'text-slate-text-secondary hover:bg-surface-container-low'}`}
+              title={isSidebarCollapsed ? label : undefined}
             >
-              {label}
+              <span className="material-symbols-outlined" aria-hidden="true">{icon}</span>
+              <span className="admin-sidebar-label">{label}</span>
             </button>
           ))}
         </nav>
         <div className="mt-auto pt-8">
-          <p className="text-xs text-slate-text-muted mb-2">Admin: {user?.full_name || 'Admin'}</p>
-          <button type="button" onClick={logout} className="w-full text-left px-3 py-2 text-sm font-bold text-secondary hover:bg-surface-container-low rounded-lg">
-            Sign out
+          <p className="admin-user-label text-xs text-slate-text-muted mb-2">Admin: {user?.full_name || 'Admin'}</p>
+          <button type="button" onClick={logout} className="admin-nav-item w-full text-left px-3 py-2 text-sm font-bold text-secondary hover:bg-surface-container-low rounded-lg" title={isSidebarCollapsed ? 'Sign out' : undefined}>
+            <span className="material-symbols-outlined" aria-hidden="true">logout</span>
+            <span className="admin-sidebar-label">Sign out</span>
           </button>
         </div>
       </aside>

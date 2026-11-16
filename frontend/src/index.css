@@ -41,6 +41,34 @@ button {
   line-height: 1;
 }
 
+.admin-brand {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.admin-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.admin-sidebar-collapsed .admin-sidebar {
+  width: 76px;
+}
+
+.admin-sidebar-collapsed .admin-brand,
+.admin-sidebar-collapsed .admin-nav-item {
+  justify-content: center;
+}
+
+.admin-sidebar-collapsed .admin-sidebar-label,
+.admin-sidebar-collapsed .admin-user-label {
+  display: none;
+}
+
 .login-shell {
   min-height: 100vh;
   display: grid;
