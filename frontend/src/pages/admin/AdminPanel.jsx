@@ -20,7 +20,7 @@ export default function AdminPanel() {
   const [schoolYear, setSchoolYear] = useState('');
   const [semester, setSemester] = useState('');
   const [activeTab, setActiveTab] = useState('enrollments');
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);

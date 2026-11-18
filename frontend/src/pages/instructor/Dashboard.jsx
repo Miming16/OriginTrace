@@ -6,7 +6,7 @@ const NAV_ITEMS = [
   { key: 'dashboard', label: 'Dashboard', icon: 'dashboard' },
   { key: 'courses', label: 'Courses', icon: 'school' },
   { key: 'flags', label: 'Flags', icon: 'flag' },
-  { key: 'settings', label: 'Profile & Settings', icon: 'settings' },
+  { key: 'settings', label: 'Account', icon: 'settings' },
 ];
 
 const DEFAULT_COLLABORATOR_REQUESTS = {
@@ -25,7 +25,7 @@ const RISK_META = {
 export default function InstructorDashboard() {
   const { user, logout } = useAuth();
   const [activeNav, setActiveNav] = useState('dashboard');
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
   const [isCourseMenuOpen, setIsCourseMenuOpen] = useState(false);
   const [isGitHubConnected, setIsGitHubConnected] = useState(false);
   const [trackDevice, setTrackDevice] = useState(true);

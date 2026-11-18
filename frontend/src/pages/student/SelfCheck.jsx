@@ -25,7 +25,7 @@ export default function StudentSelfCheck() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [loadingSubjects, setLoadingSubjects] = useState(true);
   const [gitHubConnected, setGitHubConnected] = useState(false);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
   const [isCourseMenuOpen, setIsCourseMenuOpen] = useState(false);
   const [selectedAssignment, setSelectedAssignment] = useState(null);
   const [showSelfCheckForm, setShowSelfCheckForm] = useState(false);
@@ -159,7 +159,7 @@ export default function StudentSelfCheck() {
     { key: 'dashboard', label: 'Dashboard', icon: 'dashboard' },
     { key: 'courses', label: 'Courses', icon: 'school' },
     { key: 'history', label: 'History', icon: 'history' },
-    { key: 'profile', label: 'Profile & Settings', icon: 'account_circle' },
+    { key: 'profile', label: 'Account', icon: 'account_circle' },
   ];
 
   function renderDashboard() {
