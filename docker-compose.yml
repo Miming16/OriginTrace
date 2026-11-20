@@ -42,8 +42,15 @@ services:
       JWT_SECRET: ${JWT_SECRET:-replace-this-development-secret}
       MAX_UPLOAD_BYTES: 26214400
       SELF_CHECK_LIMIT: 3
+      LOG_DIR: /app/logs
+      # 1 = live visualizer at http://localhost:8100/visualizer/ (no login, no DB writes); set 0 outside demos
+      DEMO_MODE: ${DEMO_MODE:-1}
+      VISUALIZER_DIR: /app/visualizer
     ports:
       - "8100:8100"
+    volumes:
+      - ./logs:/app/logs
+      - ./visualizer:/app/visualizer:ro
     depends_on:
       db:
         condition: service_healthy
@@ -54,4 +61,4 @@ services:
       retries: 10
 
 volumes:
-  postgres-data:
+  postgres-data:

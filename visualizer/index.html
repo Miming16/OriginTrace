@@ -1,0 +1,1232 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OriginTrace Pipeline Visualizer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f6fafe; --panel:#ffffff; --panel-2:#f0f4f8; --line:#e2e8f0; --line-2:#dfe3e7;
+  --ink:#171c1f; --ink-2:#45474c; --muted:#64748b; --faint:#94a3b8;
+  --primary:#091426; --accent:#0058be; --accent-2:#2170e4; --accent-soft:#d8e2ff;
+  --ok:#16a34a; --ok-soft:#dcfce7; --warn:#d97706; --warn-soft:#fef3c7; --err:#dc2626; --err-soft:#fee2e2;
+  --kgram:#7c3aed; --kgram-soft:#ede9fe;
+  --term-bg:#0b1426; --term-ink:#dbe4f3; --term-dim:#7d8aa5;
+  --mono:'JetBrains Mono',ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0c111a; --panel:#131a26; --panel-2:#1a2332; --line:#253043; --line-2:#2c394f;
+    --ink:#e6ebf2; --ink-2:#c3cbd8; --muted:#8b97ab; --faint:#5f6b80;
+    --primary:#e6ebf2; --accent:#6ea8ff; --accent-2:#8bb8ff; --accent-soft:#1d3156;
+    --ok:#4ade80; --ok-soft:#12321f; --warn:#fbbf24; --warn-soft:#3a2c0d; --err:#f87171; --err-soft:#3b1717;
+    --kgram:#b79cff; --kgram-soft:#2b2149; --term-bg:#070b12;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0c111a; --panel:#131a26; --panel-2:#1a2332; --line:#253043; --line-2:#2c394f;
+  --ink:#e6ebf2; --ink-2:#c3cbd8; --muted:#8b97ab; --faint:#5f6b80;
+  --primary:#e6ebf2; --accent:#6ea8ff; --accent-2:#8bb8ff; --accent-soft:#1d3156;
+  --ok:#4ade80; --ok-soft:#12321f; --warn:#fbbf24; --warn-soft:#3a2c0d; --err:#f87171; --err-soft:#3b1717;
+  --kgram:#b79cff; --kgram-soft:#2b2149; --term-bg:#070b12;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:14px/1.5 Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+button,select,input{font:inherit;color:inherit}
+code,.mono{font-family:var(--mono);font-size:12.5px}
+
+header{display:flex;align-items:center;gap:18px;padding:14px 24px;border-bottom:1px solid var(--line);background:var(--panel);position:sticky;top:0;z-index:5}
+.brand{display:flex;align-items:center;gap:10px;font-weight:800;letter-spacing:-.01em;color:var(--primary)}
+.brand-mark{width:28px;height:28px;border-radius:7px;background:var(--accent);display:grid;place-items:center;color:#fff;font-size:13px;font-weight:800}
+.brand small{font-weight:500;color:var(--muted);margin-left:2px}
+.tabs{display:flex;gap:4px;margin-left:auto;background:var(--panel-2);padding:4px;border-radius:10px}
+.tab{border:0;background:transparent;padding:7px 14px;border-radius:7px;cursor:pointer;font-weight:600;color:var(--muted)}
+.tab[aria-selected="true"]{background:var(--panel);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.theme-btn{border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:6px 10px;cursor:pointer;color:var(--muted)}
+
+main{padding:20px 24px 40px;max-width:1500px;margin:0 auto}
+.view[hidden]{display:none}
+.intro{display:flex;justify-content:space-between;gap:24px;align-items:flex-end;margin-bottom:16px;flex-wrap:wrap}
+.intro h1{font-size:22px;margin:0 0 4px;letter-spacing:-.02em;color:var(--primary)}
+.intro p{margin:0;color:var(--muted);max-width:760px}
+
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:12px}
+.toolbar select,.toolbar input[type=text]{border:1px solid var(--line);background:var(--panel-2);border-radius:8px;padding:7px 10px;min-width:0}
+.btn{border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:7px 12px;cursor:pointer;font-weight:600;display:inline-flex;gap:6px;align-items:center;white-space:nowrap}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn:disabled{opacity:.45;cursor:default}
+.sep{width:1px;height:24px;background:var(--line);margin:0 4px}
+.speed{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:12.5px}
+.counter{margin-left:auto;color:var(--muted);font-size:12.5px;font-variant-numeric:tabular-nums}
+
+.rail{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:12px}
+.phase{border:1px solid var(--line);background:var(--panel);border-radius:10px;padding:8px 10px;cursor:pointer;text-align:left}
+.phase b{display:block;font-size:12.5px}
+.phase span{font-size:11.5px;color:var(--muted)}
+.phase .num{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;background:var(--panel-2);font-size:11px;font-weight:700;margin-right:6px;color:var(--muted)}
+.phase.done .num{background:var(--ok-soft);color:var(--ok)}
+.phase.active{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.phase.active .num{background:var(--accent);color:#fff}
+
+.note{display:flex;gap:12px;background:var(--accent-soft);border-radius:12px;padding:12px 14px;margin-bottom:12px;min-height:66px}
+.note .who{flex:none;width:30px;height:30px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;font-weight:800;font-size:13px}
+.note .txt{color:var(--ink)}
+.note .txt code{background:rgba(127,127,127,.15);padding:1px 5px;border-radius:4px}
+
+.grid{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr) minmax(0,1fr);gap:12px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;display:flex;flex-direction:column;min-height:0}
+.card h3{margin:0;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:10px 14px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:8px}
+.card h3 em{font-style:normal;text-transform:none;letter-spacing:0;font-weight:500;color:var(--faint)}
+.scroll{overflow:auto;height:520px}
+
+.code{display:flex;font-family:var(--mono);font-size:12.5px;line-height:20px;padding:10px 0}
+.gutter{flex:none;text-align:right;padding:0 10px 0 12px;color:var(--faint);user-select:none;white-space:pre}
+.code pre{margin:0;padding-right:14px;white-space:pre;tab-size:4;color:var(--ink-2)}
+.code mark{background:var(--accent-soft);color:var(--ink);border-radius:3px;outline:1.5px solid var(--accent-2)}
+.code mark.k{background:var(--kgram-soft);outline-color:var(--kgram)}
+.code .rm{text-decoration:line-through;color:var(--err);background:var(--err-soft)}
+
+.tree{font-family:var(--mono);font-size:12px;padding:6px 0}
+.row{display:flex;align-items:center;gap:6px;padding:1px 12px;line-height:20px;white-space:nowrap;color:var(--faint);cursor:pointer;border-left:3px solid transparent}
+.row .ind{display:inline-block;flex:none}
+.row .ty{font-weight:600}
+.row .ln{font-size:10.5px;color:var(--faint)}
+.row .snip{color:var(--faint);overflow:hidden;text-overflow:ellipsis;font-size:11px;opacity:.8}
+.row.vis{color:var(--ink-2)}
+.row.vis .ty::before{content:"✓ ";color:var(--ok);font-weight:400}
+.row.cur{background:var(--accent-soft);color:var(--ink);border-left-color:var(--accent)}
+.row.cur .ty::before{content:"▶ ";color:var(--accent)}
+.row.kg{background:var(--kgram-soft);color:var(--ink);border-left-color:var(--kgram)}
+
+.out{padding:12px 14px;display:flex;flex-direction:column;gap:14px}
+.lbl{font-size:11.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;display:flex;justify-content:space-between}
+.lbl em{font-style:normal;text-transform:none;letter-spacing:0;font-weight:500}
+.chips{display:flex;flex-wrap:wrap;gap:4px;max-height:150px;overflow:auto;align-content:flex-start}
+.chip{font-family:var(--mono);font-size:11px;padding:1px 6px;border-radius:5px;background:var(--panel-2);border:1px solid var(--line);color:var(--ink-2)}
+.chip .i{color:var(--faint);margin-right:3px}
+.chip.cur{background:var(--accent);border-color:var(--accent);color:#fff}
+.chip.cur .i{color:#dbe7ff}
+.chip.kg{background:var(--kgram-soft);border-color:var(--kgram);color:var(--ink)}
+.chip.shared{background:var(--ok-soft);border-color:var(--ok)}
+.chip.miss{background:var(--warn-soft);border-color:var(--warn)}
+.chip.fp{cursor:pointer}
+.chip[hidden]{display:none}
+.box{background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:12.5px}
+.box .k{color:var(--muted);font-size:11.5px}
+.box .v{font-family:var(--mono);font-size:12px;word-break:break-all}
+.box .v b{color:var(--accent)}
+.bars{display:flex;align-items:flex-end;gap:2px;height:76px;overflow-x:auto;padding:4px 2px 2px;border-bottom:1px solid var(--line);scroll-behavior:smooth}
+.bar{flex:none;width:9px;background:var(--line-2);border-radius:2px 2px 0 0;position:relative}
+.bar.hide{visibility:hidden}
+.bar.cur{background:var(--kgram)}
+.bar.win{background:var(--accent-2);opacity:.55}
+.bar.min{background:var(--accent);opacity:1}
+.bar.sel{background:var(--ok)}
+.bar.sel.min{background:var(--accent)}
+.legend{display:flex;gap:12px;font-size:11.5px;color:var(--muted);margin-top:6px;flex-wrap:wrap}
+.legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+.verify{display:flex;gap:8px;align-items:center;font-size:12.5px;padding:8px 10px;border-radius:8px}
+.verify.ok{background:var(--ok-soft);color:var(--ok)}
+.verify.bad{background:var(--err-soft);color:var(--err)}
+.meter{height:8px;background:var(--panel-2);border-radius:99px;overflow:hidden;border:1px solid var(--line)}
+.meter>div{height:100%;background:var(--ok)}
+.empty{color:var(--faint);font-size:12.5px;font-style:italic}
+
+/* ---------- console ---------- */
+.cgrid{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:12px}
+.term{background:var(--term-bg);border-radius:12px;border:1px solid var(--line);display:flex;flex-direction:column;overflow:hidden}
+.term-top{display:flex;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid #1d2a44;color:var(--term-dim);font-size:12px}
+.dots{display:flex;gap:5px}.dots i{width:10px;height:10px;border-radius:50%;background:#2a3a59}
+.term-body{font-family:var(--mono);font-size:12px;line-height:19px;color:var(--term-ink);padding:10px 0;height:470px;overflow:auto}
+.tl{display:flex;gap:8px;padding:0 12px;white-space:pre-wrap;word-break:break-all;cursor:pointer;border-left:3px solid transparent}
+.tl:hover{background:rgba(255,255,255,.04)}
+.tl.pick{background:rgba(110,168,255,.12);border-left-color:#6ea8ff}
+.tl .src{flex:none;width:74px;color:var(--term-dim);font-size:11px}
+.tl .src.clone{color:#7dd3fc}.tl .src.analysis{color:#c4b5fd}.tl .src.status{color:#fcd34d}.tl .src.sys{color:#5f6b80}
+.tl .t{color:var(--term-dim)}
+.tl .L-I{color:#86efac}.tl .L-W{color:#fcd34d}.tl .L-E{color:#fca5a5;font-weight:700}
+.tl .ev{color:#fff;font-weight:600}
+.tl .fk{color:#93a3c1}
+.tl .sys{color:#5f6b80;font-style:italic}
+.term-foot{border-top:1px solid #1d2a44;padding:8px 12px;color:var(--term-ink);font-size:12.5px;min-height:56px;background:rgba(255,255,255,.02)}
+.term-foot b{color:#fff}
+.term-foot .hint{color:var(--term-dim)}
+.verdict{border-radius:12px;padding:12px 14px;margin-bottom:12px;display:flex;gap:12px;align-items:flex-start;border:1px solid var(--line);background:var(--panel)}
+.verdict .ic{flex:none;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-weight:800;background:var(--panel-2);color:var(--muted)}
+.verdict.ok{background:var(--ok-soft);border-color:transparent}.verdict.ok .ic{background:var(--ok);color:#fff}
+.verdict.bad{background:var(--err-soft);border-color:transparent}.verdict.bad .ic{background:var(--err);color:#fff}
+.verdict.run{background:var(--accent-soft);border-color:transparent}.verdict.run .ic{background:var(--accent);color:#fff}
+.verdict>div>b{display:block}
+.verdict span{color:var(--ink-2);font-size:13px}
+.fs{padding:12px 14px;display:flex;flex-direction:column;gap:12px}
+.zone{border:1px dashed var(--line-2);border-radius:10px;padding:10px 12px}
+.zone>.zt{font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+.zone>.zs{font-size:12px;color:var(--faint);margin-bottom:8px;word-break:break-all}
+.fn{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:12px;padding:5px 8px;border-radius:7px;transition:background .3s}
+.fn .nm{flex:1;word-break:break-all}
+.fn .bd{font-family:Inter,sans-serif;font-size:11px;font-weight:600;padding:1px 7px;border-radius:99px;background:var(--panel-2);color:var(--muted);white-space:nowrap}
+.fn.flash{background:var(--accent-soft)}
+.bd.ok{background:var(--ok-soft);color:var(--ok)}.bd.bad{background:var(--err-soft);color:var(--err)}.bd.run{background:var(--accent-soft);color:var(--accent)}.bd.warn{background:var(--warn-soft);color:var(--warn)}
+.fn.gone .nm{text-decoration:line-through;color:var(--faint)}
+.callout{font-size:12.5px;background:var(--warn-soft);border-radius:8px;padding:8px 10px;color:var(--ink)}
+.runs{display:flex;flex-direction:column;gap:4px;max-height:220px;overflow:auto}
+.runbtn{display:flex;justify-content:space-between;gap:8px;text-align:left;border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:6px 9px;cursor:pointer;font-family:var(--mono);font-size:11.5px}
+.runbtn:hover,.runbtn.on{border-color:var(--accent)}
+.hidden-input{display:none}
+.lines{font-family:var(--mono);font-size:12.5px;line-height:20px;padding:0 0 8px}
+.lines .fname{position:sticky;top:0;background:var(--panel);border-bottom:1px solid var(--line);padding:6px 14px;font-size:11.5px;color:var(--muted);z-index:1}
+.lines .l{display:flex;white-space:pre}
+.lines .n{flex:none;width:46px;text-align:right;padding-right:10px;color:var(--faint);user-select:none}
+.lines .t{padding-right:14px;color:var(--ink-2)}
+.lines .l.hl{background:var(--kgram-soft)}
+.lines .l.hl .n{color:var(--kgram);font-weight:700}
+.lines .l.hl .t{color:var(--ink)}
+.regions{display:flex;flex-direction:column;gap:4px;max-height:240px;overflow:auto}
+.rg{display:flex;justify-content:space-between;align-items:center;gap:8px;text-align:left;border:1px solid var(--line);background:var(--panel);border-radius:7px;padding:5px 8px;cursor:pointer;font-family:var(--mono);font-size:11.5px;width:100%}
+.rg span:first-child{word-break:break-all}
+.rg:hover{border-color:var(--accent)}
+.rg.on{border-color:var(--kgram);background:var(--kgram-soft)}
+.hbar{display:grid;grid-template-columns:minmax(0,140px) 1fr auto;gap:8px;align-items:center;font-size:12px;margin-top:6px}
+.hbar span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hbar div{height:10px;background:var(--panel-2);border-radius:99px;overflow:hidden}
+.hbar i{display:block;height:100%;background:var(--kgram)}
+.cmp{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);gap:12px;margin-top:12px}
+.saved-list{display:flex;flex-direction:column;gap:6px;padding:12px 14px;max-height:420px;overflow:auto}
+.sv{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:10px;padding:8px 10px;cursor:pointer}
+.sv.on{border-color:var(--accent);background:var(--accent-soft)}
+.sv input{margin-top:3px}
+.sv .u{font-weight:600;font-size:13px;word-break:break-all}
+.sv .m{font-size:11.5px;color:var(--muted);font-family:var(--mono)}
+.sv .x{margin-left:auto;border:0;background:transparent;color:var(--faint);cursor:pointer;font-size:16px;line-height:1;padding:0 2px}
+.sv .x:hover{color:var(--err)}
+.tag{display:inline-block;font-size:10.5px;font-weight:700;padding:0 6px;border-radius:4px;background:var(--panel-2);color:var(--muted);margin-right:4px;text-transform:uppercase;letter-spacing:.03em}
+.tag.warn{background:var(--warn-soft);color:var(--warn)}
+.cmp-body{padding:12px 14px;display:flex;flex-direction:column;gap:12px}
+.band{display:inline-block;font-weight:700;font-size:12px;padding:2px 9px;border-radius:99px}
+.band.low{background:var(--ok-soft);color:var(--ok)}.band.medium{background:var(--warn-soft);color:var(--warn)}.band.high{background:var(--err-soft);color:var(--err)}
+.flow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px}
+.mt{border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.mt .hd{display:flex;justify-content:space-between;gap:10px;align-items:baseline;flex-wrap:wrap}
+.mt .pct{font-size:20px;font-weight:800;font-variant-numeric:tabular-nums}
+.ovbar{height:8px;background:var(--panel-2);border-radius:99px;overflow:hidden;margin:6px 0 8px;position:relative}
+.ovbar>div{height:100%}
+.ovbar i{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--ink-2);opacity:.5}
+.pairs{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11.5px}
+.pairs td{padding:3px 4px;border-top:1px solid var(--line);word-break:break-all;vertical-align:top}
+.pairs td.n{text-align:right;color:var(--muted);white-space:nowrap}
+.saveopt{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);white-space:nowrap}
+@media (max-width:1150px){.cmp{grid-template-columns:minmax(0,1fr)}}
+.pill{font-size:12px;font-weight:600;padding:4px 10px;border-radius:99px;background:var(--panel-2);color:var(--muted);white-space:nowrap}
+.pill.on{background:var(--ok-soft);color:var(--ok)}
+.pill.on::before{content:"● "}
+.own{margin-bottom:12px}
+.own[hidden]{display:none}
+.own-body{padding:12px 14px;display:flex;flex-direction:column;gap:10px}
+.own-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.own-row select{border:1px solid var(--line);background:var(--panel-2);border-radius:8px;padding:7px 10px}
+.own-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+.own-grid label{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:600;color:var(--muted)}
+.own-grid textarea{font-family:var(--mono);font-size:12.5px;line-height:1.5;min-height:180px;resize:vertical;border:1px solid var(--line);border-radius:8px;padding:10px;background:var(--panel-2);color:var(--ink);tab-size:4;white-space:pre}
+.msg{font-size:12.5px;color:var(--muted)}
+.msg.err{color:var(--err)}
+@media (max-width:720px){.own-grid{grid-template-columns:minmax(0,1fr)}}
+
+@media (max-width:1150px){.grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.grid .card:last-child{grid-column:1 / -1}.cgrid{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:720px){
+  header{padding:12px 16px;flex-wrap:wrap}.tabs{margin-left:0;order:3;width:100%}.tab{flex:1}
+  main{padding:16px}.grid{grid-template-columns:minmax(0,1fr)}.sep{display:none}.phase{padding:6px}.phase b{font-size:11px;overflow-wrap:anywhere}.phase .num{display:none}.rail{grid-template-columns:repeat(5,minmax(0,1fr))}.phase span{display:none}
+  .scroll{height:380px}.term-body{height:380px}.counter{margin-left:0}
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><div class="brand-mark">OT</div>OriginTrace <small>Pipeline Visualizer</small></div>
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" aria-selected="true" data-view="ast">AST walk</button>
+    <button class="tab" role="tab" aria-selected="false" data-view="console">Clone console</button>
+    <button class="tab" role="tab" aria-selected="false" data-view="compare">Comparison</button>
+  </div>
+  <span class="pill" id="live" title="">Offline · built-in samples</span>
+  <button class="theme-btn" id="themeBtn" title="Toggle theme">Theme</button>
+</header>
+
+<main>
+<!-- ======================= AST VIEW ======================= -->
+<section class="view" id="view-ast">
+  <div class="intro">
+    <div>
+      <h1>How a function becomes fingerprints</h1>
+      <p>Pick <b>✎ Your own code</b> to run the real pipeline on anything you paste. Follows <code>analysis/app/pipeline.py</code> step by step: <code>remove_boilerplate</code> → <code>normalized_ast</code> (pre-order walk) → 5-grams hashed with SHA-256 → <code>winnow</code> (window 4). The trees were parsed with the real tree-sitter grammars; hashing and winnowing are recomputed live in this page.</p>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <select id="sampleSel" aria-label="Sample"></select>
+    <span class="sep"></span>
+    <button class="btn" id="bReset" title="Reset (Home)">⏮</button>
+    <button class="btn" id="bBack" title="Step back (←)">◀</button>
+    <button class="btn primary" id="bPlay" title="Play / pause (Space)">▶ Play</button>
+    <button class="btn" id="bStep" title="Step (→)">▶|</button>
+    <span class="sep"></span>
+    <label class="speed">Speed <input type="range" id="speed" min="0" max="100" value="55"></label>
+    <span class="counter" id="counter"></span>
+  </div>
+
+  <div class="card own" id="ownPanel" hidden>
+    <h3>Your own code <em>runs remove_boilerplate · normalized_ast · winnow on the analysis service</em></h3>
+    <div class="own-body">
+      <div class="own-row">
+        <select id="ownLang" aria-label="Language"><option value="python">Python</option><option value="java">Java</option><option value="c">C</option><option value="php">PHP</option></select>
+        <button class="btn primary" id="ownRun">Analyze with the real pipeline</button>
+        <span class="msg" id="ownMsg"></span>
+      </div>
+      <div class="own-grid">
+        <label>Code<textarea id="ownA" spellcheck="false"></textarea></label>
+        <label>Compare with (optional, e.g. a renamed copy)<textarea id="ownB" spellcheck="false"></textarea></label>
+      </div>
+    </div>
+  </div>
+
+  <div class="rail" id="rail"></div>
+  <div class="note"><div class="who">T</div><div class="txt" id="note"></div></div>
+
+  <div class="grid">
+    <div class="card">
+      <h3>Source <em id="codeSub"></em></h3>
+      <div class="scroll" id="codeScroll"><div class="code"><div class="gutter" id="gutter"></div><pre id="code"></pre></div></div>
+    </div>
+    <div class="card">
+      <h3>Syntax tree <em>named nodes only</em></h3>
+      <div class="scroll" id="treeScroll"><div class="tree" id="tree"></div></div>
+    </div>
+    <div class="card">
+      <h3>What the pipeline produces</h3>
+      <div class="scroll"><div class="out" id="out">
+        <div>
+          <div class="lbl">node_types list <em id="typesCount"></em></div>
+          <div class="chips" id="types"></div>
+        </div>
+        <div id="hashBlock">
+          <div class="lbl">5-gram hashes <em id="hashCount"></em></div>
+          <div class="bars" id="bars"></div>
+          <div class="legend"><span><i style="background:var(--kgram)"></i>hashing now</span><span><i style="background:var(--accent-2);opacity:.55"></i>window of 4</span><span><i style="background:var(--accent)"></i>window minimum</span><span><i style="background:var(--ok)"></i>kept as fingerprint</span></div>
+        </div>
+        <div id="detail"></div>
+        <div id="result"></div>
+      </div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= CONSOLE VIEW ======================= -->
+<section class="view" id="view-console" hidden>
+  <div class="intro">
+    <div>
+      <h1>Did the clone work, and where did it go?</h1>
+      <p>Replays what <code>analyze_git_url</code> and <code>RunLog</code> write, in the exact line format of <code>analysis/app/logger.py</code>. With the analysis service running, <b>Live</b> really clones the URL and shows the log lines it wrote. Simulated scenarios work offline, and you can open your real <code>OriginTrace/logs</code> folder to read past runs. Click any line for an explanation.</p>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <input type="text" id="url" value="https://github.com/Miming16/calculator-demo" aria-label="Repository URL" style="flex:1;min-width:220px">
+    <select id="cloneLang" aria-label="Language"><option value="python">Python</option><option value="java">Java</option><option value="c">C</option><option value="php">PHP</option></select>
+    <select id="scenario" aria-label="Scenario">
+      <option value="live" disabled>Live: really clone it</option>
+      <option value="ok">Simulated: clone succeeds</option>
+      <option value="notfound">Simulated: not found</option>
+      <option value="private">Simulated: private repo</option>
+      <option value="timeout">Simulated: over 60s</option>
+    </select>
+    <label class="saveopt" title="Saved runs can be compared against later runs"><input type="checkbox" id="saveRun" checked> Save run</label>
+    <button class="btn primary" id="runBtn">▶ Run</button>
+    <span class="sep"></span>
+    <button class="btn" id="openDir">Open logs folder</button>
+    <button class="btn" id="openFile">Open .log file</button>
+    <input class="hidden-input" type="file" id="dirInput" webkitdirectory multiple>
+    <input class="hidden-input" type="file" id="fileInput" accept=".log,.txt" multiple>
+  </div>
+
+  <div class="verdict" id="verdict"><div class="ic">?</div><div><b>No run yet</b><span>Pick a scenario and press Run, or open your logs folder.</span></div></div>
+
+  <div class="cgrid">
+    <div class="term">
+      <div class="term-top"><div class="dots"><i></i><i></i><i></i></div><span id="termTitle">analysis service · logs</span><span style="margin-left:auto" id="termNote"></span></div>
+      <div class="term-body" id="term"></div>
+      <div class="term-foot" id="explain"><span class="hint">Click a log line to see what it means.</span></div>
+    </div>
+    <div class="card">
+      <h3>Where things are <em id="fsNote"></em></h3>
+      <div class="fs" id="fs"></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:12px">
+    <h3>Saved results <em>open one in the Comparison tab</em></h3>
+    <div class="saved-list" id="savedList"><span class="empty">Live mode only. Run a clone with “Save run” ticked and it appears here.</span></div>
+  </div>
+</section>
+
+<!-- ======================= COMPARISON VIEW ======================= -->
+<section class="view" id="view-compare" hidden>
+  <div class="intro">
+    <div>
+      <h1>Why a pair gets flagged</h1>
+      <p>Checks one run against another the way <code>db.save_analysis</code> checks a new submission against a peer: which fingerprints are shared, the code they come from, how the overlap sets the risk band, and which commit or provenance flags raise it. The built-in example works offline; saved runs from the Clone console need live mode.</p>
+    </div>
+  </div>
+  <div class="toolbar">
+    <span class="speed">Check</span><select id="cmpA" aria-label="Run to check" style="max-width:300px"></select>
+    <span class="speed">against</span><select id="cmpB" aria-label="Run to compare against" style="max-width:300px"></select>
+    <button class="btn primary" id="cmpGo">Compare</button>
+    <span class="msg" id="cmpMsg"></span>
+    <span class="sep"></span>
+    <button class="btn" id="cReset" title="Reset">⏮</button>
+    <button class="btn" id="cBack" title="Step back (←)">◀</button>
+    <button class="btn primary" id="cPlay" title="Play / pause (Space)">▶ Play</button>
+    <button class="btn" id="cStep" title="Step (→)">▶|</button>
+    <label class="speed">Speed <input type="range" id="cSpeed" min="0" max="100" value="50"></label>
+    <span class="counter" id="cCounter"></span>
+  </div>
+  <div class="rail" id="cRail" style="grid-template-columns:repeat(6,1fr)"></div>
+  <div class="note"><div class="who">T</div><div class="txt" id="cNote"></div></div>
+  <div class="grid">
+    <div class="card"><h3><span id="cTitleA">checked run</span> <em>checked</em></h3><div class="scroll" id="cScrollA"><div class="lines" id="cCodeA"></div></div></div>
+    <div class="card"><h3><span id="cTitleB">saved run</span> <em>compared against</em></h3><div class="scroll" id="cScrollB"><div class="lines" id="cCodeB"></div></div></div>
+    <div class="card"><h3>Why it flags</h3><div class="scroll"><div class="out" id="cOut"></div></div></div>
+  </div>
+</section>
+</main>
+
+<script>
+const SAMPLES = [{"id":"py_div","label":"Python \u00b7 _safe_divide (calculator.py)","lang":"python","source":"def _safe_divide(left: float, right: float) -> float:\n    if right == 0:\n        raise EvaluationError(\"division by zero\")\n    return left / right\n","filtered":"def _safe_divide(left: float, right: float) -> float:\n    if right == 0:\n        raise EvaluationError(\"division by zero\")\n    return left / right","pair":"py_div2","ast":{"t":"module","s":0,"e":146,"c":[{"t":"function_definition","s":0,"e":146,"c":[{"t":"identifier","s":4,"e":16,"c":[]},{"t":"parameters","s":16,"e":43,"c":[{"t":"typed_parameter","s":17,"e":28,"c":[{"t":"identifier","s":17,"e":21,"c":[]},{"t":"type","s":23,"e":28,"c":[{"t":"identifier","s":23,"e":28,"c":[]}]}]},{"t":"typed_parameter","s":30,"e":42,"c":[{"t":"identifier","s":30,"e":35,"c":[]},{"t":"type","s":37,"e":42,"c":[{"t":"identifier","s":37,"e":42,"c":[]}]}]}]},{"t":"type","s":47,"e":52,"c":[{"t":"identifier","s":47,"e":52,"c":[]}]},{"t":"block","s":58,"e":146,"c":[{"t":"if_statement","s":58,"e":122,"c":[{"t":"comparison_operator","s":61,"e":71,"c":[{"t":"identifier","s":61,"e":66,"c":[]},{"t":"integer","s":70,"e":71,"c":[]}]},{"t":"block","s":81,"e":122,"c":[{"t":"raise_statement","s":81,"e":122,"c":[{"t":"call","s":87,"e":122,"c":[{"t":"identifier","s":87,"e":102,"c":[]},{"t":"argument_list","s":102,"e":122,"c":[{"t":"string","s":103,"e":121,"c":[{"t":"string_start","s":103,"e":104,"c":[]},{"t":"string_content","s":104,"e":120,"c":[]},{"t":"string_end","s":120,"e":121,"c":[]}]}]}]}]}]}]},{"t":"return_statement","s":127,"e":146,"c":[{"t":"binary_operator","s":134,"e":146,"c":[{"t":"identifier","s":134,"e":138,"c":[]},{"t":"identifier","s":141,"e":146,"c":[]}]}]}]}]}]},"expect":{"types":32,"fps":[[0,"654097858402615944"],[2,"2374252668856526520"],[5,"4754737546149586517"],[9,"894163485790183773"],[10,"1893271518704172255"],[12,"2916584630471310465"],[15,"4644932684360308015"],[18,"1897213768669567314"],[19,"1710506202788861706"],[21,"2173514996146211810"],[25,"420545833204308755"]]}},{"id":"py_div2","label":"Python \u00b7 _div (calculator_disguised.py)","lang":"python","source":"def _div(lhs: float, rhs: float) -> float:\n    if rhs == 0:\n        raise RuntimeProblem(\"division by zero\")\n    return lhs / rhs\n","filtered":"def _div(lhs: float, rhs: float) -> float:\n    if rhs == 0:\n        raise RuntimeProblem(\"division by zero\")\n    return lhs / rhs","pair":"py_div","ast":{"t":"module","s":0,"e":129,"c":[{"t":"function_definition","s":0,"e":129,"c":[{"t":"identifier","s":4,"e":8,"c":[]},{"t":"parameters","s":8,"e":32,"c":[{"t":"typed_parameter","s":9,"e":19,"c":[{"t":"identifier","s":9,"e":12,"c":[]},{"t":"type","s":14,"e":19,"c":[{"t":"identifier","s":14,"e":19,"c":[]}]}]},{"t":"typed_parameter","s":21,"e":31,"c":[{"t":"identifier","s":21,"e":24,"c":[]},{"t":"type","s":26,"e":31,"c":[{"t":"identifier","s":26,"e":31,"c":[]}]}]}]},{"t":"type","s":36,"e":41,"c":[{"t":"identifier","s":36,"e":41,"c":[]}]},{"t":"block","s":47,"e":129,"c":[{"t":"if_statement","s":47,"e":108,"c":[{"t":"comparison_operator","s":50,"e":58,"c":[{"t":"identifier","s":50,"e":53,"c":[]},{"t":"integer","s":57,"e":58,"c":[]}]},{"t":"block","s":68,"e":108,"c":[{"t":"raise_statement","s":68,"e":108,"c":[{"t":"call","s":74,"e":108,"c":[{"t":"identifier","s":74,"e":88,"c":[]},{"t":"argument_list","s":88,"e":108,"c":[{"t":"string","s":89,"e":107,"c":[{"t":"string_start","s":89,"e":90,"c":[]},{"t":"string_content","s":90,"e":106,"c":[]},{"t":"string_end","s":106,"e":107,"c":[]}]}]}]}]}]}]},{"t":"return_statement","s":113,"e":129,"c":[{"t":"binary_operator","s":120,"e":129,"c":[{"t":"identifier","s":120,"e":123,"c":[]},{"t":"identifier","s":126,"e":129,"c":[]}]}]}]}]}]},"expect":{"types":32,"fps":[[0,"654097858402615944"],[2,"2374252668856526520"],[5,"4754737546149586517"],[9,"894163485790183773"],[10,"1893271518704172255"],[12,"2916584630471310465"],[15,"4644932684360308015"],[18,"1897213768669567314"],[19,"1710506202788861706"],[21,"2173514996146211810"],[25,"420545833204308755"]]}},{"id":"py_read","label":"Python \u00b7 _read_while (calculator.py)","lang":"python","source":"def _read_while(self, predicate: Callable[[str], bool]) -> str:\n    start = self.index\n    while self.index < len(self.source) and predicate(self.source[self.index]):\n        self.index += 1\n    return self.source[start:self.index]\n","filtered":"def _read_while(self, predicate: Callable[[str], bool]) -> str:\n    start = self.index\n    while self.index < len(self.source) and predicate(self.source[self.index]):\n        self.index += 1\n    return self.source[start:self.index]","pair":"py_read2","ast":{"t":"module","s":0,"e":231,"c":[{"t":"function_definition","s":0,"e":231,"c":[{"t":"identifier","s":4,"e":15,"c":[]},{"t":"parameters","s":15,"e":55,"c":[{"t":"identifier","s":16,"e":20,"c":[]},{"t":"typed_parameter","s":22,"e":54,"c":[{"t":"identifier","s":22,"e":31,"c":[]},{"t":"type","s":33,"e":54,"c":[{"t":"generic_type","s":33,"e":54,"c":[{"t":"identifier","s":33,"e":41,"c":[]},{"t":"type_parameter","s":41,"e":54,"c":[{"t":"type","s":42,"e":47,"c":[{"t":"list","s":42,"e":47,"c":[{"t":"identifier","s":43,"e":46,"c":[]}]}]},{"t":"type","s":49,"e":53,"c":[{"t":"identifier","s":49,"e":53,"c":[]}]}]}]}]}]}]},{"t":"type","s":59,"e":62,"c":[{"t":"identifier","s":59,"e":62,"c":[]}]},{"t":"block","s":68,"e":231,"c":[{"t":"expression_statement","s":68,"e":86,"c":[{"t":"assignment","s":68,"e":86,"c":[{"t":"identifier","s":68,"e":73,"c":[]},{"t":"attribute","s":76,"e":86,"c":[{"t":"identifier","s":76,"e":80,"c":[]},{"t":"identifier","s":81,"e":86,"c":[]}]}]}]},{"t":"while_statement","s":91,"e":190,"c":[{"t":"boolean_operator","s":97,"e":165,"c":[{"t":"comparison_operator","s":97,"e":126,"c":[{"t":"attribute","s":97,"e":107,"c":[{"t":"identifier","s":97,"e":101,"c":[]},{"t":"identifier","s":102,"e":107,"c":[]}]},{"t":"call","s":110,"e":126,"c":[{"t":"identifier","s":110,"e":113,"c":[]},{"t":"argument_list","s":113,"e":126,"c":[{"t":"attribute","s":114,"e":125,"c":[{"t":"identifier","s":114,"e":118,"c":[]},{"t":"identifier","s":119,"e":125,"c":[]}]}]}]}]},{"t":"call","s":131,"e":165,"c":[{"t":"identifier","s":131,"e":140,"c":[]},{"t":"argument_list","s":140,"e":165,"c":[{"t":"subscript","s":141,"e":164,"c":[{"t":"attribute","s":141,"e":152,"c":[{"t":"identifier","s":141,"e":145,"c":[]},{"t":"identifier","s":146,"e":152,"c":[]}]},{"t":"attribute","s":153,"e":163,"c":[{"t":"identifier","s":153,"e":157,"c":[]},{"t":"identifier","s":158,"e":163,"c":[]}]}]}]}]}]},{"t":"block","s":175,"e":190,"c":[{"t":"expression_statement","s":175,"e":190,"c":[{"t":"augmented_assignment","s":175,"e":190,"c":[{"t":"attribute","s":175,"e":185,"c":[{"t":"identifier","s":175,"e":179,"c":[]},{"t":"identifier","s":180,"e":185,"c":[]}]},{"t":"integer","s":189,"e":190,"c":[]}]}]}]}]},{"t":"return_statement","s":195,"e":231,"c":[{"t":"subscript","s":202,"e":231,"c":[{"t":"attribute","s":202,"e":213,"c":[{"t":"identifier","s":202,"e":206,"c":[]},{"t":"identifier","s":207,"e":213,"c":[]}]},{"t":"slice","s":214,"e":230,"c":[{"t":"identifier","s":214,"e":219,"c":[]},{"t":"attribute","s":220,"e":230,"c":[{"t":"identifier","s":220,"e":224,"c":[]},{"t":"identifier","s":225,"e":230,"c":[]}]}]}]}]}]}]}]},"expect":{"types":64,"fps":[[0,"2195973191757117589"],[2,"5537034699809841105"],[6,"2395408632913339762"],[7,"1292652685740388439"],[9,"1171857340278616145"],[10,"1166369715234326467"],[13,"894163485790183773"],[16,"321676762098109680"],[17,"312614528932140854"],[18,"2809235323826939564"],[22,"243113954475090515"],[26,"2731952946907334742"],[27,"2725702042523259148"],[31,"721487920323596701"],[33,"1545002530271286810"],[36,"5377155195698239455"],[38,"5231458255002265058"],[40,"2037040131723792774"],[43,"289227349909891017"],[46,"1419872905191606169"],[50,"1801325918806186749"],[54,"650216948046627349"],[55,"868531376250058845"],[58,"4564990587332614750"]]}},{"id":"py_read2","label":"Python \u00b7 _consume (calculator_disguised.py)","lang":"python","source":"def _consume(self, predicate: Callable[[str], bool]) -> str:\n    start = self.cursor\n    while self.cursor < len(self.text) and predicate(self.text[self.cursor]):\n        self.cursor += 1\n    return self.text[start:self.cursor]\n","filtered":"def _consume(self, predicate: Callable[[str], bool]) -> str:\n    start = self.cursor\n    while self.cursor < len(self.text) and predicate(self.text[self.cursor]):\n        self.cursor += 1\n    return self.text[start:self.cursor]","pair":"py_read","ast":{"t":"module","s":0,"e":227,"c":[{"t":"function_definition","s":0,"e":227,"c":[{"t":"identifier","s":4,"e":12,"c":[]},{"t":"parameters","s":12,"e":52,"c":[{"t":"identifier","s":13,"e":17,"c":[]},{"t":"typed_parameter","s":19,"e":51,"c":[{"t":"identifier","s":19,"e":28,"c":[]},{"t":"type","s":30,"e":51,"c":[{"t":"generic_type","s":30,"e":51,"c":[{"t":"identifier","s":30,"e":38,"c":[]},{"t":"type_parameter","s":38,"e":51,"c":[{"t":"type","s":39,"e":44,"c":[{"t":"list","s":39,"e":44,"c":[{"t":"identifier","s":40,"e":43,"c":[]}]}]},{"t":"type","s":46,"e":50,"c":[{"t":"identifier","s":46,"e":50,"c":[]}]}]}]}]}]}]},{"t":"type","s":56,"e":59,"c":[{"t":"identifier","s":56,"e":59,"c":[]}]},{"t":"block","s":65,"e":227,"c":[{"t":"expression_statement","s":65,"e":84,"c":[{"t":"assignment","s":65,"e":84,"c":[{"t":"identifier","s":65,"e":70,"c":[]},{"t":"attribute","s":73,"e":84,"c":[{"t":"identifier","s":73,"e":77,"c":[]},{"t":"identifier","s":78,"e":84,"c":[]}]}]}]},{"t":"while_statement","s":89,"e":187,"c":[{"t":"boolean_operator","s":95,"e":161,"c":[{"t":"comparison_operator","s":95,"e":123,"c":[{"t":"attribute","s":95,"e":106,"c":[{"t":"identifier","s":95,"e":99,"c":[]},{"t":"identifier","s":100,"e":106,"c":[]}]},{"t":"call","s":109,"e":123,"c":[{"t":"identifier","s":109,"e":112,"c":[]},{"t":"argument_list","s":112,"e":123,"c":[{"t":"attribute","s":113,"e":122,"c":[{"t":"identifier","s":113,"e":117,"c":[]},{"t":"identifier","s":118,"e":122,"c":[]}]}]}]}]},{"t":"call","s":128,"e":161,"c":[{"t":"identifier","s":128,"e":137,"c":[]},{"t":"argument_list","s":137,"e":161,"c":[{"t":"subscript","s":138,"e":160,"c":[{"t":"attribute","s":138,"e":147,"c":[{"t":"identifier","s":138,"e":142,"c":[]},{"t":"identifier","s":143,"e":147,"c":[]}]},{"t":"attribute","s":148,"e":159,"c":[{"t":"identifier","s":148,"e":152,"c":[]},{"t":"identifier","s":153,"e":159,"c":[]}]}]}]}]}]},{"t":"block","s":171,"e":187,"c":[{"t":"expression_statement","s":171,"e":187,"c":[{"t":"augmented_assignment","s":171,"e":187,"c":[{"t":"attribute","s":171,"e":182,"c":[{"t":"identifier","s":171,"e":175,"c":[]},{"t":"identifier","s":176,"e":182,"c":[]}]},{"t":"integer","s":186,"e":187,"c":[]}]}]}]}]},{"t":"return_statement","s":192,"e":227,"c":[{"t":"subscript","s":199,"e":227,"c":[{"t":"attribute","s":199,"e":208,"c":[{"t":"identifier","s":199,"e":203,"c":[]},{"t":"identifier","s":204,"e":208,"c":[]}]},{"t":"slice","s":209,"e":226,"c":[{"t":"identifier","s":209,"e":214,"c":[]},{"t":"attribute","s":215,"e":226,"c":[{"t":"identifier","s":215,"e":219,"c":[]},{"t":"identifier","s":220,"e":226,"c":[]}]}]}]}]}]}]}]},"expect":{"types":64,"fps":[[0,"2195973191757117589"],[2,"5537034699809841105"],[6,"2395408632913339762"],[7,"1292652685740388439"],[9,"1171857340278616145"],[10,"1166369715234326467"],[13,"894163485790183773"],[16,"321676762098109680"],[17,"312614528932140854"],[18,"2809235323826939564"],[22,"243113954475090515"],[26,"2731952946907334742"],[27,"2725702042523259148"],[31,"721487920323596701"],[33,"1545002530271286810"],[36,"5377155195698239455"],[38,"5231458255002265058"],[40,"2037040131723792774"],[43,"289227349909891017"],[46,"1419872905191606169"],[50,"1801325918806186749"],[54,"650216948046627349"],[55,"868531376250058845"],[58,"4564990587332614750"]]}},{"id":"py_tok","label":"Python \u00b7 Lexer.tokens (calculator.py)","lang":"python","source":"def tokens(self) -> Iterator[Token]:\n    while self.index < len(self.source):\n        char = self._peek()\n        start = self.index\n        if char.isspace():\n            self.index += 1\n        elif char.isdigit() or char == \".\":\n            text = self._read_while(lambda c: c.isdigit() or c == \".\")\n            if text.count(\".\") > 1:\n                raise LexerError(f\"malformed number '{text}' at {start}\")\n            yield Token(\"NUMBER\", text, start)\n        elif char.isalpha() or char == \"_\":\n            yield Token(\"NAME\", self._read_while(lambda c: c.isalnum() or c == \"_\"), start)\n        elif char in OPERATOR_CHARS:\n            self.index += 1\n            if char == \"/\" and self._peek() == \"/\":\n                self.index += 1\n                yield Token(\"OP\", \"//\", start)\n            else:\n                yield Token(\"OP\", char, start)\n        elif char in SINGLE_CHAR_TOKENS:\n            self.index += 1\n            yield Token(SINGLE_CHAR_TOKENS[char], char, start)\n        else:\n            raise LexerError(f\"unexpected character '{char}' at {start}\")\n    yield Token(\"END\", \"\", self.index)\n","filtered":"def tokens(self) -> Iterator[Token]:\n    while self.index < len(self.source):\n        char = self._peek()\n        start = self.index\n        if char.isspace():\n            self.index += 1\n        elif char.isdigit() or char == \".\":\n            text = self._read_while(lambda c: c.isdigit() or c == \".\")\n            if text.count(\".\") > 1:\n                raise LexerError(f\"malformed number '{text}' at {start}\")\n            yield Token(\"NUMBER\", text, start)\n        elif char.isalpha() or char == \"_\":\n            yield Token(\"NAME\", self._read_while(lambda c: c.isalnum() or c == \"_\"), start)\n        elif char in OPERATOR_CHARS:\n            self.index += 1\n            if char == \"/\" and self._peek() == \"/\":\n                self.index += 1\n                yield Token(\"OP\", \"//\", start)\n            else:\n                yield Token(\"OP\", char, start)\n        elif char in SINGLE_CHAR_TOKENS:\n            self.index += 1\n            yield Token(SINGLE_CHAR_TOKENS[char], char, start)\n        else:\n            raise LexerError(f\"unexpected character '{char}' at {start}\")\n    yield Token(\"END\", \"\", self.index)","pair":"py_tok2","ast":{"t":"module","s":0,"e":1115,"c":[{"t":"function_definition","s":0,"e":1115,"c":[{"t":"identifier","s":4,"e":10,"c":[]},{"t":"parameters","s":10,"e":16,"c":[{"t":"identifier","s":11,"e":15,"c":[]}]},{"t":"type","s":20,"e":35,"c":[{"t":"generic_type","s":20,"e":35,"c":[{"t":"identifier","s":20,"e":28,"c":[]},{"t":"type_parameter","s":28,"e":35,"c":[{"t":"type","s":29,"e":34,"c":[{"t":"identifier","s":29,"e":34,"c":[]}]}]}]}]},{"t":"block","s":41,"e":1115,"c":[{"t":"while_statement","s":41,"e":1076,"c":[{"t":"comparison_operator","s":47,"e":76,"c":[{"t":"attribute","s":47,"e":57,"c":[{"t":"identifier","s":47,"e":51,"c":[]},{"t":"identifier","s":52,"e":57,"c":[]}]},{"t":"call","s":60,"e":76,"c":[{"t":"identifier","s":60,"e":63,"c":[]},{"t":"argument_list","s":63,"e":76,"c":[{"t":"attribute","s":64,"e":75,"c":[{"t":"identifier","s":64,"e":68,"c":[]},{"t":"identifier","s":69,"e":75,"c":[]}]}]}]}]},{"t":"block","s":86,"e":1076,"c":[{"t":"expression_statement","s":86,"e":105,"c":[{"t":"assignment","s":86,"e":105,"c":[{"t":"identifier","s":86,"e":90,"c":[]},{"t":"call","s":93,"e":105,"c":[{"t":"attribute","s":93,"e":103,"c":[{"t":"identifier","s":93,"e":97,"c":[]},{"t":"identifier","s":98,"e":103,"c":[]}]},{"t":"argument_list","s":103,"e":105,"c":[]}]}]}]},{"t":"expression_statement","s":114,"e":132,"c":[{"t":"assignment","s":114,"e":132,"c":[{"t":"identifier","s":114,"e":119,"c":[]},{"t":"attribute","s":122,"e":132,"c":[{"t":"identifier","s":122,"e":126,"c":[]},{"t":"identifier","s":127,"e":132,"c":[]}]}]}]},{"t":"if_statement","s":141,"e":1076,"c":[{"t":"call","s":144,"e":158,"c":[{"t":"attribute","s":144,"e":156,"c":[{"t":"identifier","s":144,"e":148,"c":[]},{"t":"identifier","s":149,"e":156,"c":[]}]},{"t":"argument_list","s":156,"e":158,"c":[]}]},{"t":"block","s":172,"e":187,"c":[{"t":"expression_statement","s":172,"e":187,"c":[{"t":"augmented_assignment","s":172,"e":187,"c":[{"t":"attribute","s":172,"e":182,"c":[{"t":"identifier","s":172,"e":176,"c":[]},{"t":"identifier","s":177,"e":182,"c":[]}]},{"t":"integer","s":186,"e":187,"c":[]}]}]}]},{"t":"elif_clause","s":196,"e":459,"c":[{"t":"boolean_operator","s":201,"e":230,"c":[{"t":"call","s":201,"e":215,"c":[{"t":"attribute","s":201,"e":213,"c":[{"t":"identifier","s":201,"e":205,"c":[]},{"t":"identifier","s":206,"e":213,"c":[]}]},{"t":"argument_list","s":213,"e":215,"c":[]}]},{"t":"comparison_operator","s":219,"e":230,"c":[{"t":"identifier","s":219,"e":223,"c":[]},{"t":"string","s":227,"e":230,"c":[{"t":"string_start","s":227,"e":228,"c":[]},{"t":"string_content","s":228,"e":229,"c":[]},{"t":"string_end","s":229,"e":230,"c":[]}]}]}]},{"t":"block","s":244,"e":459,"c":[{"t":"expression_statement","s":244,"e":302,"c":[{"t":"assignment","s":244,"e":302,"c":[{"t":"identifier","s":244,"e":248,"c":[]},{"t":"call","s":251,"e":302,"c":[{"t":"attribute","s":251,"e":267,"c":[{"t":"identifier","s":251,"e":255,"c":[]},{"t":"identifier","s":256,"e":267,"c":[]}]},{"t":"argument_list","s":267,"e":302,"c":[{"t":"lambda","s":268,"e":301,"c":[{"t":"lambda_parameters","s":275,"e":276,"c":[{"t":"identifier","s":275,"e":276,"c":[]}]},{"t":"boolean_operator","s":278,"e":301,"c":[{"t":"call","s":278,"e":289,"c":[{"t":"attribute","s":278,"e":287,"c":[{"t":"identifier","s":278,"e":279,"c":[]},{"t":"identifier","s":280,"e":287,"c":[]}]},{"t":"argument_list","s":287,"e":289,"c":[]}]},{"t":"comparison_operator","s":293,"e":301,"c":[{"t":"identifier","s":293,"e":294,"c":[]},{"t":"string","s":298,"e":301,"c":[{"t":"string_start","s":298,"e":299,"c":[]},{"t":"string_content","s":299,"e":300,"c":[]},{"t":"string_end","s":300,"e":301,"c":[]}]}]}]}]}]}]}]}]},{"t":"if_statement","s":315,"e":412,"c":[{"t":"comparison_operator","s":318,"e":337,"c":[{"t":"call","s":318,"e":333,"c":[{"t":"attribute","s":318,"e":328,"c":[{"t":"identifier","s":318,"e":322,"c":[]},{"t":"identifier","s":323,"e":328,"c":[]}]},{"t":"argument_list","s":328,"e":333,"c":[{"t":"string","s":329,"e":332,"c":[{"t":"string_start","s":329,"e":330,"c":[]},{"t":"string_content","s":330,"e":331,"c":[]},{"t":"string_end","s":331,"e":332,"c":[]}]}]}]},{"t":"integer","s":336,"e":337,"c":[]}]},{"t":"block","s":355,"e":412,"c":[{"t":"raise_statement","s":355,"e":412,"c":[{"t":"call","s":361,"e":412,"c":[{"t":"identifier","s":361,"e":371,"c":[]},{"t":"argument_list","s":371,"e":412,"c":[{"t":"string","s":372,"e":411,"c":[{"t":"string_start","s":372,"e":374,"c":[]},{"t":"string_content","s":374,"e":392,"c":[]},{"t":"interpolation","s":392,"e":398,"c":[{"t":"identifier","s":393,"e":397,"c":[]}]},{"t":"string_content","s":398,"e":403,"c":[]},{"t":"interpolation","s":403,"e":410,"c":[{"t":"identifier","s":404,"e":409,"c":[]}]},{"t":"string_end","s":410,"e":411,"c":[]}]}]}]}]}]}]},{"t":"expression_statement","s":425,"e":459,"c":[{"t":"yield","s":425,"e":459,"c":[{"t":"call","s":431,"e":459,"c":[{"t":"identifier","s":431,"e":436,"c":[]},{"t":"argument_list","s":436,"e":459,"c":[{"t":"string","s":437,"e":445,"c":[{"t":"string_start","s":437,"e":438,"c":[]},{"t":"string_content","s":438,"e":444,"c":[]},{"t":"string_end","s":444,"e":445,"c":[]}]},{"t":"identifier","s":447,"e":451,"c":[]},{"t":"identifier","s":453,"e":458,"c":[]}]}]}]}]}]}]},{"t":"elif_clause","s":468,"e":595,"c":[{"t":"boolean_operator","s":473,"e":502,"c":[{"t":"call","s":473,"e":487,"c":[{"t":"attribute","s":473,"e":485,"c":[{"t":"identifier","s":473,"e":477,"c":[]},{"t":"identifier","s":478,"e":485,"c":[]}]},{"t":"argument_list","s":485,"e":487,"c":[]}]},{"t":"comparison_operator","s":491,"e":502,"c":[{"t":"identifier","s":491,"e":495,"c":[]},{"t":"string","s":499,"e":502,"c":[{"t":"string_start","s":499,"e":500,"c":[]},{"t":"string_content","s":500,"e":501,"c":[]},{"t":"string_end","s":501,"e":502,"c":[]}]}]}]},{"t":"block","s":516,"e":595,"c":[{"t":"expression_statement","s":516,"e":595,"c":[{"t":"yield","s":516,"e":595,"c":[{"t":"call","s":522,"e":595,"c":[{"t":"identifier","s":522,"e":527,"c":[]},{"t":"argument_list","s":527,"e":595,"c":[{"t":"string","s":528,"e":534,"c":[{"t":"string_start","s":528,"e":529,"c":[]},{"t":"string_content","s":529,"e":533,"c":[]},{"t":"string_end","s":533,"e":534,"c":[]}]},{"t":"call","s":536,"e":587,"c":[{"t":"attribute","s":536,"e":552,"c":[{"t":"identifier","s":536,"e":540,"c":[]},{"t":"identifier","s":541,"e":552,"c":[]}]},{"t":"argument_list","s":552,"e":587,"c":[{"t":"lambda","s":553,"e":586,"c":[{"t":"lambda_parameters","s":560,"e":561,"c":[{"t":"identifier","s":560,"e":561,"c":[]}]},{"t":"boolean_operator","s":563,"e":586,"c":[{"t":"call","s":563,"e":574,"c":[{"t":"attribute","s":563,"e":572,"c":[{"t":"identifier","s":563,"e":564,"c":[]},{"t":"identifier","s":565,"e":572,"c":[]}]},{"t":"argument_list","s":572,"e":574,"c":[]}]},{"t":"comparison_operator","s":578,"e":586,"c":[{"t":"identifier","s":578,"e":579,"c":[]},{"t":"string","s":583,"e":586,"c":[{"t":"string_start","s":583,"e":584,"c":[]},{"t":"string_content","s":584,"e":585,"c":[]},{"t":"string_end","s":585,"e":586,"c":[]}]}]}]}]}]}]},{"t":"identifier","s":589,"e":594,"c":[]}]}]}]}]}]}]},{"t":"elif_clause","s":604,"e":856,"c":[{"t":"comparison_operator","s":609,"e":631,"c":[{"t":"identifier","s":609,"e":613,"c":[]},{"t":"identifier","s":617,"e":631,"c":[]}]},{"t":"block","s":645,"e":856,"c":[{"t":"expression_statement","s":645,"e":660,"c":[{"t":"augmented_assignment","s":645,"e":660,"c":[{"t":"attribute","s":645,"e":655,"c":[{"t":"identifier","s":645,"e":649,"c":[]},{"t":"identifier","s":650,"e":655,"c":[]}]},{"t":"integer","s":659,"e":660,"c":[]}]}]},{"t":"if_statement","s":673,"e":856,"c":[{"t":"boolean_operator","s":676,"e":711,"c":[{"t":"comparison_operator","s":676,"e":687,"c":[{"t":"identifier","s":676,"e":680,"c":[]},{"t":"string","s":684,"e":687,"c":[{"t":"string_start","s":684,"e":685,"c":[]},{"t":"string_content","s":685,"e":686,"c":[]},{"t":"string_end","s":686,"e":687,"c":[]}]}]},{"t":"comparison_operator","s":692,"e":711,"c":[{"t":"call","s":692,"e":704,"c":[{"t":"attribute","s":692,"e":702,"c":[{"t":"identifier","s":692,"e":696,"c":[]},{"t":"identifier","s":697,"e":702,"c":[]}]},{"t":"argument_list","s":702,"e":704,"c":[]}]},{"t":"string","s":708,"e":711,"c":[{"t":"string_start","s":708,"e":709,"c":[]},{"t":"string_content","s":709,"e":710,"c":[]},{"t":"string_end","s":710,"e":711,"c":[]}]}]}]},{"t":"block","s":729,"e":791,"c":[{"t":"expression_statement","s":729,"e":744,"c":[{"t":"augmented_assignment","s":729,"e":744,"c":[{"t":"attribute","s":729,"e":739,"c":[{"t":"identifier","s":729,"e":733,"c":[]},{"t":"identifier","s":734,"e":739,"c":[]}]},{"t":"integer","s":743,"e":744,"c":[]}]}]},{"t":"expression_statement","s":761,"e":791,"c":[{"t":"yield","s":761,"e":791,"c":[{"t":"call","s":767,"e":791,"c":[{"t":"identifier","s":767,"e":772,"c":[]},{"t":"argument_list","s":772,"e":791,"c":[{"t":"string","s":773,"e":777,"c":[{"t":"string_start","s":773,"e":774,"c":[]},{"t":"string_content","s":774,"e":776,"c":[]},{"t":"string_end","s":776,"e":777,"c":[]}]},{"t":"string","s":779,"e":783,"c":[{"t":"string_start","s":779,"e":780,"c":[]},{"t":"string_content","s":780,"e":782,"c":[]},{"t":"string_end","s":782,"e":783,"c":[]}]},{"t":"identifier","s":785,"e":790,"c":[]}]}]}]}]}]},{"t":"else_clause","s":804,"e":856,"c":[{"t":"block","s":826,"e":856,"c":[{"t":"expression_statement","s":826,"e":856,"c":[{"t":"yield","s":826,"e":856,"c":[{"t":"call","s":832,"e":856,"c":[{"t":"identifier","s":832,"e":837,"c":[]},{"t":"argument_list","s":837,"e":856,"c":[{"t":"string","s":838,"e":842,"c":[{"t":"string_start","s":838,"e":839,"c":[]},{"t":"string_content","s":839,"e":841,"c":[]},{"t":"string_end","s":841,"e":842,"c":[]}]},{"t":"identifier","s":844,"e":848,"c":[]},{"t":"identifier","s":850,"e":855,"c":[]}]}]}]}]}]}]}]}]}]},{"t":"elif_clause","s":865,"e":988,"c":[{"t":"comparison_operator","s":870,"e":896,"c":[{"t":"identifier","s":870,"e":874,"c":[]},{"t":"identifier","s":878,"e":896,"c":[]}]},{"t":"block","s":910,"e":988,"c":[{"t":"expression_statement","s":910,"e":925,"c":[{"t":"augmented_assignment","s":910,"e":925,"c":[{"t":"attribute","s":910,"e":920,"c":[{"t":"identifier","s":910,"e":914,"c":[]},{"t":"identifier","s":915,"e":920,"c":[]}]},{"t":"integer","s":924,"e":925,"c":[]}]}]},{"t":"expression_statement","s":938,"e":988,"c":[{"t":"yield","s":938,"e":988,"c":[{"t":"call","s":944,"e":988,"c":[{"t":"identifier","s":944,"e":949,"c":[]},{"t":"argument_list","s":949,"e":988,"c":[{"t":"subscript","s":950,"e":974,"c":[{"t":"identifier","s":950,"e":968,"c":[]},{"t":"identifier","s":969,"e":973,"c":[]}]},{"t":"identifier","s":976,"e":980,"c":[]},{"t":"identifier","s":982,"e":987,"c":[]}]}]}]}]}]}]},{"t":"else_clause","s":997,"e":1076,"c":[{"t":"block","s":1015,"e":1076,"c":[{"t":"raise_statement","s":1015,"e":1076,"c":[{"t":"call","s":1021,"e":1076,"c":[{"t":"identifier","s":1021,"e":1031,"c":[]},{"t":"argument_list","s":1031,"e":1076,"c":[{"t":"string","s":1032,"e":1075,"c":[{"t":"string_start","s":1032,"e":1034,"c":[]},{"t":"string_content","s":1034,"e":1056,"c":[]},{"t":"interpolation","s":1056,"e":1062,"c":[{"t":"identifier","s":1057,"e":1061,"c":[]}]},{"t":"string_content","s":1062,"e":1067,"c":[]},{"t":"interpolation","s":1067,"e":1074,"c":[{"t":"identifier","s":1068,"e":1073,"c":[]}]},{"t":"string_end","s":1074,"e":1075,"c":[]}]}]}]}]}]}]}]}]}]},{"t":"expression_statement","s":1081,"e":1115,"c":[{"t":"yield","s":1081,"e":1115,"c":[{"t":"call","s":1087,"e":1115,"c":[{"t":"identifier","s":1087,"e":1092,"c":[]},{"t":"argument_list","s":1092,"e":1115,"c":[{"t":"string","s":1093,"e":1098,"c":[{"t":"string_start","s":1093,"e":1094,"c":[]},{"t":"string_content","s":1094,"e":1097,"c":[]},{"t":"string_end","s":1097,"e":1098,"c":[]}]},{"t":"string","s":1100,"e":1102,"c":[{"t":"string_start","s":1100,"e":1101,"c":[]},{"t":"string_end","s":1101,"e":1102,"c":[]}]},{"t":"attribute","s":1104,"e":1114,"c":[{"t":"identifier","s":1104,"e":1108,"c":[]},{"t":"identifier","s":1109,"e":1114,"c":[]}]}]}]}]}]}]}]}]},"expect":{"types":283,"fps":[[0,"2195973191757117589"],[3,"2252438393157169756"],[5,"1292652685740388439"],[9,"917439693277655980"],[13,"2725702042523259148"],[17,"721487920323596701"],[18,"2545123596354404816"],[22,"312614528932140854"],[26,"1410649714499573026"],[30,"219083831748733660"],[34,"2189544345702895342"],[35,"5185844241621984369"],[39,"3144424547820882657"],[41,"2005875224870879888"],[43,"2137603143415715698"],[47,"186268189598942828"],[50,"283553584962476566"],[51,"1971272384943906977"],[54,"2345339907911252662"],[57,"298086446104710766"],[60,"484472138077934710"],[62,"1536700571734643232"],[66,"2325596624947515356"],[67,"1410649714499573026"],[70,"187679154304660801"],[73,"15130470520368266"],[74,"1005915045670953179"],[78,"2345339907911252662"],[81,"298086446104710766"],[84,"383687009465527875"],[85,"2169232690961973232"],[88,"2860244642067116910"],[91,"522445689777463017"],[95,"1875675017249206084"],[98,"1462553101602672289"],[100,"1710506202788861706"],[102,"2173514996146211810"],[103,"3335622919295758385"],[107,"3380633259457280136"],[110,"3138757972704114584"],[114,"1816308219595170958"],[115,"35246543559549461"],[116,"2173514996146211810"],[120,"3022787874463774364"],[121,"2279554009807302743"],[125,"1971272384943906977"],[128,"2345339907911252662"],[131,"298086446104710766"],[134,"484472138077934710"],[136,"2314487974384959077"],[139,"1816308219595170958"],[140,"35246543559549461"],[141,"2173514996146211810"],[142,"3335622919295758385"],[146,"2344626845769933244"],[150,"187679154304660801"],[153,"15130470520368266"],[154,"1005915045670953179"],[158,"2345339907911252662"],[161,"298086446104710766"],[164,"6526675821932244418"],[167,"4338018433745778933"],[168,"3578183433785529250"],[170,"1912775669314465849"],[172,"1419872905191606169"],[176,"968012367220520235"],[178,"743900033618106626"],[179,"6863115191035227441"],[183,"7515687514408859569"],[185,"5730466007650207594"],[187,"3144399778898358029"],[190,"522445689777463017"],[194,"484472138077934710"],[198,"3435842990199746584"],[201,"2430049012692784366"],[204,"258214242990972471"],[206,"35246543559549461"],[210,"371157079902349326"],[212,"1769091668062847933"],[215,"2345077141978505621"],[217,"1101921887682248505"],[221,"1816308219595170958"],[222,"35246543559549461"],[223,"2173514996146211810"],[227,"3022787874463774364"],[228,"2279554009807302743"],[229,"3526822986873066015"],[233,"1912775669314465849"],[235,"1419872905191606169"],[239,"2430049012692784366"],[242,"258214242990972471"],[245,"1761987638614375618"],[249,"2391721290612170855"],[252,"591848977832480642"],[254,"1710506202788861706"],[256,"2173514996146211810"],[257,"3335622919295758385"],[261,"3380633259457280136"],[264,"3138757972704114584"],[268,"1816308219595170958"],[269,"35246543559549461"],[273,"371157079902349326"],[277,"783473123199530680"]]}},{"id":"py_tok2","label":"Python \u00b7 Scanner.lexemes (calculator_disguised.py)","lang":"python","source":"def lexemes(self) -> Iterator[Lexeme]:\n    while self.cursor < len(self.text):\n        char = self._look()\n        start = self.cursor\n        if char.isspace():\n            self.cursor += 1\n        elif char.isdigit() or char == \".\":\n            text = self._consume(lambda c: c.isdigit() or c == \".\")\n            if text.count(\".\") > 1:\n                raise ScanError(f\"malformed number '{text}' at {start}\")\n            yield Lexeme(\"NUMBER\", text, start)\n        elif char.isalpha() or char == \"_\":\n            yield Lexeme(\"NAME\", self._consume(lambda c: c.isalnum() or c == \"_\"), start)\n        elif char in SYMBOLS:\n            self.cursor += 1\n            if char == \"/\" and self._look() == \"/\":\n                self.cursor += 1\n                yield Lexeme(\"OP\", \"//\", start)\n            else:\n                yield Lexeme(\"OP\", char, start)\n        elif char in PUNCTUATION:\n            self.cursor += 1\n            yield Lexeme(PUNCTUATION[char], char, start)\n        else:\n            raise ScanError(f\"unexpected character '{char}' at {start}\")\n    yield Lexeme(\"END\", \"\", self.cursor)\n","filtered":"def lexemes(self) -> Iterator[Lexeme]:\n    while self.cursor < len(self.text):\n        char = self._look()\n        start = self.cursor\n        if char.isspace():\n            self.cursor += 1\n        elif char.isdigit() or char == \".\":\n            text = self._consume(lambda c: c.isdigit() or c == \".\")\n            if text.count(\".\") > 1:\n                raise ScanError(f\"malformed number '{text}' at {start}\")\n            yield Lexeme(\"NUMBER\", text, start)\n        elif char.isalpha() or char == \"_\":\n            yield Lexeme(\"NAME\", self._consume(lambda c: c.isalnum() or c == \"_\"), start)\n        elif char in SYMBOLS:\n            self.cursor += 1\n            if char == \"/\" and self._look() == \"/\":\n                self.cursor += 1\n                yield Lexeme(\"OP\", \"//\", start)\n            else:\n                yield Lexeme(\"OP\", char, start)\n        elif char in PUNCTUATION:\n            self.cursor += 1\n            yield Lexeme(PUNCTUATION[char], char, start)\n        else:\n            raise ScanError(f\"unexpected character '{char}' at {start}\")\n    yield Lexeme(\"END\", \"\", self.cursor)","pair":"py_tok","ast":{"t":"module","s":0,"e":1099,"c":[{"t":"function_definition","s":0,"e":1099,"c":[{"t":"identifier","s":4,"e":11,"c":[]},{"t":"parameters","s":11,"e":17,"c":[{"t":"identifier","s":12,"e":16,"c":[]}]},{"t":"type","s":21,"e":37,"c":[{"t":"generic_type","s":21,"e":37,"c":[{"t":"identifier","s":21,"e":29,"c":[]},{"t":"type_parameter","s":29,"e":37,"c":[{"t":"type","s":30,"e":36,"c":[{"t":"identifier","s":30,"e":36,"c":[]}]}]}]}]},{"t":"block","s":43,"e":1099,"c":[{"t":"while_statement","s":43,"e":1058,"c":[{"t":"comparison_operator","s":49,"e":77,"c":[{"t":"attribute","s":49,"e":60,"c":[{"t":"identifier","s":49,"e":53,"c":[]},{"t":"identifier","s":54,"e":60,"c":[]}]},{"t":"call","s":63,"e":77,"c":[{"t":"identifier","s":63,"e":66,"c":[]},{"t":"argument_list","s":66,"e":77,"c":[{"t":"attribute","s":67,"e":76,"c":[{"t":"identifier","s":67,"e":71,"c":[]},{"t":"identifier","s":72,"e":76,"c":[]}]}]}]}]},{"t":"block","s":87,"e":1058,"c":[{"t":"expression_statement","s":87,"e":106,"c":[{"t":"assignment","s":87,"e":106,"c":[{"t":"identifier","s":87,"e":91,"c":[]},{"t":"call","s":94,"e":106,"c":[{"t":"attribute","s":94,"e":104,"c":[{"t":"identifier","s":94,"e":98,"c":[]},{"t":"identifier","s":99,"e":104,"c":[]}]},{"t":"argument_list","s":104,"e":106,"c":[]}]}]}]},{"t":"expression_statement","s":115,"e":134,"c":[{"t":"assignment","s":115,"e":134,"c":[{"t":"identifier","s":115,"e":120,"c":[]},{"t":"attribute","s":123,"e":134,"c":[{"t":"identifier","s":123,"e":127,"c":[]},{"t":"identifier","s":128,"e":134,"c":[]}]}]}]},{"t":"if_statement","s":143,"e":1058,"c":[{"t":"call","s":146,"e":160,"c":[{"t":"attribute","s":146,"e":158,"c":[{"t":"identifier","s":146,"e":150,"c":[]},{"t":"identifier","s":151,"e":158,"c":[]}]},{"t":"argument_list","s":158,"e":160,"c":[]}]},{"t":"block","s":174,"e":190,"c":[{"t":"expression_statement","s":174,"e":190,"c":[{"t":"augmented_assignment","s":174,"e":190,"c":[{"t":"attribute","s":174,"e":185,"c":[{"t":"identifier","s":174,"e":178,"c":[]},{"t":"identifier","s":179,"e":185,"c":[]}]},{"t":"integer","s":189,"e":190,"c":[]}]}]}]},{"t":"elif_clause","s":199,"e":459,"c":[{"t":"boolean_operator","s":204,"e":233,"c":[{"t":"call","s":204,"e":218,"c":[{"t":"attribute","s":204,"e":216,"c":[{"t":"identifier","s":204,"e":208,"c":[]},{"t":"identifier","s":209,"e":216,"c":[]}]},{"t":"argument_list","s":216,"e":218,"c":[]}]},{"t":"comparison_operator","s":222,"e":233,"c":[{"t":"identifier","s":222,"e":226,"c":[]},{"t":"string","s":230,"e":233,"c":[{"t":"string_start","s":230,"e":231,"c":[]},{"t":"string_content","s":231,"e":232,"c":[]},{"t":"string_end","s":232,"e":233,"c":[]}]}]}]},{"t":"block","s":247,"e":459,"c":[{"t":"expression_statement","s":247,"e":302,"c":[{"t":"assignment","s":247,"e":302,"c":[{"t":"identifier","s":247,"e":251,"c":[]},{"t":"call","s":254,"e":302,"c":[{"t":"attribute","s":254,"e":267,"c":[{"t":"identifier","s":254,"e":258,"c":[]},{"t":"identifier","s":259,"e":267,"c":[]}]},{"t":"argument_list","s":267,"e":302,"c":[{"t":"lambda","s":268,"e":301,"c":[{"t":"lambda_parameters","s":275,"e":276,"c":[{"t":"identifier","s":275,"e":276,"c":[]}]},{"t":"boolean_operator","s":278,"e":301,"c":[{"t":"call","s":278,"e":289,"c":[{"t":"attribute","s":278,"e":287,"c":[{"t":"identifier","s":278,"e":279,"c":[]},{"t":"identifier","s":280,"e":287,"c":[]}]},{"t":"argument_list","s":287,"e":289,"c":[]}]},{"t":"comparison_operator","s":293,"e":301,"c":[{"t":"identifier","s":293,"e":294,"c":[]},{"t":"string","s":298,"e":301,"c":[{"t":"string_start","s":298,"e":299,"c":[]},{"t":"string_content","s":299,"e":300,"c":[]},{"t":"string_end","s":300,"e":301,"c":[]}]}]}]}]}]}]}]}]},{"t":"if_statement","s":315,"e":411,"c":[{"t":"comparison_operator","s":318,"e":337,"c":[{"t":"call","s":318,"e":333,"c":[{"t":"attribute","s":318,"e":328,"c":[{"t":"identifier","s":318,"e":322,"c":[]},{"t":"identifier","s":323,"e":328,"c":[]}]},{"t":"argument_list","s":328,"e":333,"c":[{"t":"string","s":329,"e":332,"c":[{"t":"string_start","s":329,"e":330,"c":[]},{"t":"string_content","s":330,"e":331,"c":[]},{"t":"string_end","s":331,"e":332,"c":[]}]}]}]},{"t":"integer","s":336,"e":337,"c":[]}]},{"t":"block","s":355,"e":411,"c":[{"t":"raise_statement","s":355,"e":411,"c":[{"t":"call","s":361,"e":411,"c":[{"t":"identifier","s":361,"e":370,"c":[]},{"t":"argument_list","s":370,"e":411,"c":[{"t":"string","s":371,"e":410,"c":[{"t":"string_start","s":371,"e":373,"c":[]},{"t":"string_content","s":373,"e":391,"c":[]},{"t":"interpolation","s":391,"e":397,"c":[{"t":"identifier","s":392,"e":396,"c":[]}]},{"t":"string_content","s":397,"e":402,"c":[]},{"t":"interpolation","s":402,"e":409,"c":[{"t":"identifier","s":403,"e":408,"c":[]}]},{"t":"string_end","s":409,"e":410,"c":[]}]}]}]}]}]}]},{"t":"expression_statement","s":424,"e":459,"c":[{"t":"yield","s":424,"e":459,"c":[{"t":"call","s":430,"e":459,"c":[{"t":"identifier","s":430,"e":436,"c":[]},{"t":"argument_list","s":436,"e":459,"c":[{"t":"string","s":437,"e":445,"c":[{"t":"string_start","s":437,"e":438,"c":[]},{"t":"string_content","s":438,"e":444,"c":[]},{"t":"string_end","s":444,"e":445,"c":[]}]},{"t":"identifier","s":447,"e":451,"c":[]},{"t":"identifier","s":453,"e":458,"c":[]}]}]}]}]}]}]},{"t":"elif_clause","s":468,"e":593,"c":[{"t":"boolean_operator","s":473,"e":502,"c":[{"t":"call","s":473,"e":487,"c":[{"t":"attribute","s":473,"e":485,"c":[{"t":"identifier","s":473,"e":477,"c":[]},{"t":"identifier","s":478,"e":485,"c":[]}]},{"t":"argument_list","s":485,"e":487,"c":[]}]},{"t":"comparison_operator","s":491,"e":502,"c":[{"t":"identifier","s":491,"e":495,"c":[]},{"t":"string","s":499,"e":502,"c":[{"t":"string_start","s":499,"e":500,"c":[]},{"t":"string_content","s":500,"e":501,"c":[]},{"t":"string_end","s":501,"e":502,"c":[]}]}]}]},{"t":"block","s":516,"e":593,"c":[{"t":"expression_statement","s":516,"e":593,"c":[{"t":"yield","s":516,"e":593,"c":[{"t":"call","s":522,"e":593,"c":[{"t":"identifier","s":522,"e":528,"c":[]},{"t":"argument_list","s":528,"e":593,"c":[{"t":"string","s":529,"e":535,"c":[{"t":"string_start","s":529,"e":530,"c":[]},{"t":"string_content","s":530,"e":534,"c":[]},{"t":"string_end","s":534,"e":535,"c":[]}]},{"t":"call","s":537,"e":585,"c":[{"t":"attribute","s":537,"e":550,"c":[{"t":"identifier","s":537,"e":541,"c":[]},{"t":"identifier","s":542,"e":550,"c":[]}]},{"t":"argument_list","s":550,"e":585,"c":[{"t":"lambda","s":551,"e":584,"c":[{"t":"lambda_parameters","s":558,"e":559,"c":[{"t":"identifier","s":558,"e":559,"c":[]}]},{"t":"boolean_operator","s":561,"e":584,"c":[{"t":"call","s":561,"e":572,"c":[{"t":"attribute","s":561,"e":570,"c":[{"t":"identifier","s":561,"e":562,"c":[]},{"t":"identifier","s":563,"e":570,"c":[]}]},{"t":"argument_list","s":570,"e":572,"c":[]}]},{"t":"comparison_operator","s":576,"e":584,"c":[{"t":"identifier","s":576,"e":577,"c":[]},{"t":"string","s":581,"e":584,"c":[{"t":"string_start","s":581,"e":582,"c":[]},{"t":"string_content","s":582,"e":583,"c":[]},{"t":"string_end","s":583,"e":584,"c":[]}]}]}]}]}]}]},{"t":"identifier","s":587,"e":592,"c":[]}]}]}]}]}]}]},{"t":"elif_clause","s":602,"e":851,"c":[{"t":"comparison_operator","s":607,"e":622,"c":[{"t":"identifier","s":607,"e":611,"c":[]},{"t":"identifier","s":615,"e":622,"c":[]}]},{"t":"block","s":636,"e":851,"c":[{"t":"expression_statement","s":636,"e":652,"c":[{"t":"augmented_assignment","s":636,"e":652,"c":[{"t":"attribute","s":636,"e":647,"c":[{"t":"identifier","s":636,"e":640,"c":[]},{"t":"identifier","s":641,"e":647,"c":[]}]},{"t":"integer","s":651,"e":652,"c":[]}]}]},{"t":"if_statement","s":665,"e":851,"c":[{"t":"boolean_operator","s":668,"e":703,"c":[{"t":"comparison_operator","s":668,"e":679,"c":[{"t":"identifier","s":668,"e":672,"c":[]},{"t":"string","s":676,"e":679,"c":[{"t":"string_start","s":676,"e":677,"c":[]},{"t":"string_content","s":677,"e":678,"c":[]},{"t":"string_end","s":678,"e":679,"c":[]}]}]},{"t":"comparison_operator","s":684,"e":703,"c":[{"t":"call","s":684,"e":696,"c":[{"t":"attribute","s":684,"e":694,"c":[{"t":"identifier","s":684,"e":688,"c":[]},{"t":"identifier","s":689,"e":694,"c":[]}]},{"t":"argument_list","s":694,"e":696,"c":[]}]},{"t":"string","s":700,"e":703,"c":[{"t":"string_start","s":700,"e":701,"c":[]},{"t":"string_content","s":701,"e":702,"c":[]},{"t":"string_end","s":702,"e":703,"c":[]}]}]}]},{"t":"block","s":721,"e":785,"c":[{"t":"expression_statement","s":721,"e":737,"c":[{"t":"augmented_assignment","s":721,"e":737,"c":[{"t":"attribute","s":721,"e":732,"c":[{"t":"identifier","s":721,"e":725,"c":[]},{"t":"identifier","s":726,"e":732,"c":[]}]},{"t":"integer","s":736,"e":737,"c":[]}]}]},{"t":"expression_statement","s":754,"e":785,"c":[{"t":"yield","s":754,"e":785,"c":[{"t":"call","s":760,"e":785,"c":[{"t":"identifier","s":760,"e":766,"c":[]},{"t":"argument_list","s":766,"e":785,"c":[{"t":"string","s":767,"e":771,"c":[{"t":"string_start","s":767,"e":768,"c":[]},{"t":"string_content","s":768,"e":770,"c":[]},{"t":"string_end","s":770,"e":771,"c":[]}]},{"t":"string","s":773,"e":777,"c":[{"t":"string_start","s":773,"e":774,"c":[]},{"t":"string_content","s":774,"e":776,"c":[]},{"t":"string_end","s":776,"e":777,"c":[]}]},{"t":"identifier","s":779,"e":784,"c":[]}]}]}]}]}]},{"t":"else_clause","s":798,"e":851,"c":[{"t":"block","s":820,"e":851,"c":[{"t":"expression_statement","s":820,"e":851,"c":[{"t":"yield","s":820,"e":851,"c":[{"t":"call","s":826,"e":851,"c":[{"t":"identifier","s":826,"e":832,"c":[]},{"t":"argument_list","s":832,"e":851,"c":[{"t":"string","s":833,"e":837,"c":[{"t":"string_start","s":833,"e":834,"c":[]},{"t":"string_content","s":834,"e":836,"c":[]},{"t":"string_end","s":836,"e":837,"c":[]}]},{"t":"identifier","s":839,"e":843,"c":[]},{"t":"identifier","s":845,"e":850,"c":[]}]}]}]}]}]}]}]}]}]},{"t":"elif_clause","s":860,"e":971,"c":[{"t":"comparison_operator","s":865,"e":884,"c":[{"t":"identifier","s":865,"e":869,"c":[]},{"t":"identifier","s":873,"e":884,"c":[]}]},{"t":"block","s":898,"e":971,"c":[{"t":"expression_statement","s":898,"e":914,"c":[{"t":"augmented_assignment","s":898,"e":914,"c":[{"t":"attribute","s":898,"e":909,"c":[{"t":"identifier","s":898,"e":902,"c":[]},{"t":"identifier","s":903,"e":909,"c":[]}]},{"t":"integer","s":913,"e":914,"c":[]}]}]},{"t":"expression_statement","s":927,"e":971,"c":[{"t":"yield","s":927,"e":971,"c":[{"t":"call","s":933,"e":971,"c":[{"t":"identifier","s":933,"e":939,"c":[]},{"t":"argument_list","s":939,"e":971,"c":[{"t":"subscript","s":940,"e":957,"c":[{"t":"identifier","s":940,"e":951,"c":[]},{"t":"identifier","s":952,"e":956,"c":[]}]},{"t":"identifier","s":959,"e":963,"c":[]},{"t":"identifier","s":965,"e":970,"c":[]}]}]}]}]}]}]},{"t":"else_clause","s":980,"e":1058,"c":[{"t":"block","s":998,"e":1058,"c":[{"t":"raise_statement","s":998,"e":1058,"c":[{"t":"call","s":1004,"e":1058,"c":[{"t":"identifier","s":1004,"e":1013,"c":[]},{"t":"argument_list","s":1013,"e":1058,"c":[{"t":"string","s":1014,"e":1057,"c":[{"t":"string_start","s":1014,"e":1016,"c":[]},{"t":"string_content","s":1016,"e":1038,"c":[]},{"t":"interpolation","s":1038,"e":1044,"c":[{"t":"identifier","s":1039,"e":1043,"c":[]}]},{"t":"string_content","s":1044,"e":1049,"c":[]},{"t":"interpolation","s":1049,"e":1056,"c":[{"t":"identifier","s":1050,"e":1055,"c":[]}]},{"t":"string_end","s":1056,"e":1057,"c":[]}]}]}]}]}]}]}]}]}]},{"t":"expression_statement","s":1063,"e":1099,"c":[{"t":"yield","s":1063,"e":1099,"c":[{"t":"call","s":1069,"e":1099,"c":[{"t":"identifier","s":1069,"e":1075,"c":[]},{"t":"argument_list","s":1075,"e":1099,"c":[{"t":"string","s":1076,"e":1081,"c":[{"t":"string_start","s":1076,"e":1077,"c":[]},{"t":"string_content","s":1077,"e":1080,"c":[]},{"t":"string_end","s":1080,"e":1081,"c":[]}]},{"t":"string","s":1083,"e":1085,"c":[{"t":"string_start","s":1083,"e":1084,"c":[]},{"t":"string_end","s":1084,"e":1085,"c":[]}]},{"t":"attribute","s":1087,"e":1098,"c":[{"t":"identifier","s":1087,"e":1091,"c":[]},{"t":"identifier","s":1092,"e":1098,"c":[]}]}]}]}]}]}]}]}]},"expect":{"types":283,"fps":[[0,"2195973191757117589"],[3,"2252438393157169756"],[5,"1292652685740388439"],[9,"917439693277655980"],[13,"2725702042523259148"],[17,"721487920323596701"],[18,"2545123596354404816"],[22,"312614528932140854"],[26,"1410649714499573026"],[30,"219083831748733660"],[34,"2189544345702895342"],[35,"5185844241621984369"],[39,"3144424547820882657"],[41,"2005875224870879888"],[43,"2137603143415715698"],[47,"186268189598942828"],[50,"283553584962476566"],[51,"1971272384943906977"],[54,"2345339907911252662"],[57,"298086446104710766"],[60,"484472138077934710"],[62,"1536700571734643232"],[66,"2325596624947515356"],[67,"1410649714499573026"],[70,"187679154304660801"],[73,"15130470520368266"],[74,"1005915045670953179"],[78,"2345339907911252662"],[81,"298086446104710766"],[84,"383687009465527875"],[85,"2169232690961973232"],[88,"2860244642067116910"],[91,"522445689777463017"],[95,"1875675017249206084"],[98,"1462553101602672289"],[100,"1710506202788861706"],[102,"2173514996146211810"],[103,"3335622919295758385"],[107,"3380633259457280136"],[110,"3138757972704114584"],[114,"1816308219595170958"],[115,"35246543559549461"],[116,"2173514996146211810"],[120,"3022787874463774364"],[121,"2279554009807302743"],[125,"1971272384943906977"],[128,"2345339907911252662"],[131,"298086446104710766"],[134,"484472138077934710"],[136,"2314487974384959077"],[139,"1816308219595170958"],[140,"35246543559549461"],[141,"2173514996146211810"],[142,"3335622919295758385"],[146,"2344626845769933244"],[150,"187679154304660801"],[153,"15130470520368266"],[154,"1005915045670953179"],[158,"2345339907911252662"],[161,"298086446104710766"],[164,"6526675821932244418"],[167,"4338018433745778933"],[168,"3578183433785529250"],[170,"1912775669314465849"],[172,"1419872905191606169"],[176,"968012367220520235"],[178,"743900033618106626"],[179,"6863115191035227441"],[183,"7515687514408859569"],[185,"5730466007650207594"],[187,"3144399778898358029"],[190,"522445689777463017"],[194,"484472138077934710"],[198,"3435842990199746584"],[201,"2430049012692784366"],[204,"258214242990972471"],[206,"35246543559549461"],[210,"371157079902349326"],[212,"1769091668062847933"],[215,"2345077141978505621"],[217,"1101921887682248505"],[221,"1816308219595170958"],[222,"35246543559549461"],[223,"2173514996146211810"],[227,"3022787874463774364"],[228,"2279554009807302743"],[229,"3526822986873066015"],[233,"1912775669314465849"],[235,"1419872905191606169"],[239,"2430049012692784366"],[242,"258214242990972471"],[245,"1761987638614375618"],[249,"2391721290612170855"],[252,"591848977832480642"],[254,"1710506202788861706"],[256,"2173514996146211810"],[257,"3335622919295758385"],[261,"3380633259457280136"],[264,"3138757972704114584"],[268,"1816308219595170958"],[269,"35246543559549461"],[273,"371157079902349326"],[277,"783473123199530680"]]}},{"id":"c_fact","label":"C \u00b7 factorial with #include","lang":"c","source":"#include <stdio.h>\n\nint factorial(int n) {\n    if (n <= 1) {\n        return 1;\n    }\n    return n * factorial(n - 1);\n}\n","filtered":"\nint factorial(int n) {\n    if (n <= 1) {\n        return 1;\n    }\n    return n * factorial(n - 1);\n}","pair":null,"ast":{"t":"translation_unit","s":1,"e":100,"c":[{"t":"function_definition","s":1,"e":100,"c":[{"t":"primitive_type","s":1,"e":4,"c":[]},{"t":"function_declarator","s":5,"e":21,"c":[{"t":"identifier","s":5,"e":14,"c":[]},{"t":"parameter_list","s":14,"e":21,"c":[{"t":"parameter_declaration","s":15,"e":20,"c":[{"t":"primitive_type","s":15,"e":18,"c":[]},{"t":"identifier","s":19,"e":20,"c":[]}]}]}]},{"t":"compound_statement","s":22,"e":100,"c":[{"t":"if_statement","s":28,"e":65,"c":[{"t":"parenthesized_expression","s":31,"e":39,"c":[{"t":"binary_expression","s":32,"e":38,"c":[{"t":"identifier","s":32,"e":33,"c":[]},{"t":"number_literal","s":37,"e":38,"c":[]}]}]},{"t":"compound_statement","s":40,"e":65,"c":[{"t":"return_statement","s":50,"e":59,"c":[{"t":"number_literal","s":57,"e":58,"c":[]}]}]}]},{"t":"return_statement","s":70,"e":98,"c":[{"t":"binary_expression","s":77,"e":97,"c":[{"t":"identifier","s":77,"e":78,"c":[]},{"t":"call_expression","s":81,"e":97,"c":[{"t":"identifier","s":81,"e":90,"c":[]},{"t":"argument_list","s":90,"e":97,"c":[{"t":"binary_expression","s":91,"e":96,"c":[{"t":"identifier","s":91,"e":92,"c":[]},{"t":"number_literal","s":95,"e":96,"c":[]}]}]}]}]}]}]}]}]},"expect":{"types":27,"fps":[[3,"2577604121410720129"],[4,"1043650867521760026"],[8,"381965246335555022"],[9,"12713715108938698"],[11,"2386219597056309318"],[12,"3517217278421582503"],[16,"332658511046139119"],[18,"395387608288559184"],[21,"2941476093881430474"]]}},{"id":"java_sum","label":"Java \u00b7 sumArray","lang":"java","source":"public class Stats {\n    static int sumArray(int[] values) {\n        int total = 0;\n        for (int v : values) {\n            total += v;\n        }\n        return total;\n    }\n}\n","filtered":"public class Stats {\n    static int sumArray(int[] values) {\n        int total = 0;\n        for (int v : values) {\n            total += v;\n        }\n        return total;\n    }\n}","pair":null,"ast":{"t":"program","s":0,"e":178,"c":[{"t":"class_declaration","s":0,"e":178,"c":[{"t":"modifiers","s":0,"e":6,"c":[]},{"t":"identifier","s":13,"e":18,"c":[]},{"t":"class_body","s":19,"e":178,"c":[{"t":"method_declaration","s":25,"e":176,"c":[{"t":"modifiers","s":25,"e":31,"c":[]},{"t":"integral_type","s":32,"e":35,"c":[]},{"t":"identifier","s":36,"e":44,"c":[]},{"t":"formal_parameters","s":44,"e":58,"c":[{"t":"formal_parameter","s":45,"e":57,"c":[{"t":"array_type","s":45,"e":50,"c":[{"t":"integral_type","s":45,"e":48,"c":[]},{"t":"dimensions","s":48,"e":50,"c":[]}]},{"t":"identifier","s":51,"e":57,"c":[]}]}]},{"t":"block","s":59,"e":176,"c":[{"t":"local_variable_declaration","s":69,"e":83,"c":[{"t":"integral_type","s":69,"e":72,"c":[]},{"t":"variable_declarator","s":73,"e":82,"c":[{"t":"identifier","s":73,"e":78,"c":[]},{"t":"decimal_integer_literal","s":81,"e":82,"c":[]}]}]},{"t":"enhanced_for_statement","s":92,"e":148,"c":[{"t":"integral_type","s":97,"e":100,"c":[]},{"t":"identifier","s":101,"e":102,"c":[]},{"t":"identifier","s":105,"e":111,"c":[]},{"t":"block","s":113,"e":148,"c":[{"t":"expression_statement","s":127,"e":138,"c":[{"t":"assignment_expression","s":127,"e":137,"c":[{"t":"identifier","s":127,"e":132,"c":[]},{"t":"identifier","s":136,"e":137,"c":[]}]}]}]}]},{"t":"return_statement","s":157,"e":170,"c":[{"t":"identifier","s":164,"e":169,"c":[]}]}]}]}]}]}]},"expect":{"types":32,"fps":[[3,"1645980956050374111"],[4,"751743191166749611"],[6,"629070672764010490"],[7,"400153108717924072"],[10,"2207713981964485582"],[14,"994204554474451659"],[16,"1018059924729080630"],[20,"4250673983977907745"],[21,"1561203716805410695"],[25,"2269575105903911621"],[26,"1323622515033912593"]]}},{"id":"php_max","label":"PHP \u00b7 find_max","lang":"php","source":"<?php\nfunction find_max($items) {\n    $best = $items[0];\n    foreach ($items as $item) {\n        if ($item > $best) {\n            $best = $item;\n        }\n    }\n    return $best;\n}\n","filtered":"<?php\nfunction find_max($items) {\n    $best = $items[0];\n    foreach ($items as $item) {\n        if ($item > $best) {\n            $best = $item;\n        }\n    }\n    return $best;\n}","pair":null,"ast":{"t":"program","s":0,"e":180,"c":[{"t":"php_tag","s":0,"e":5,"c":[]},{"t":"function_definition","s":6,"e":180,"c":[{"t":"name","s":15,"e":23,"c":[]},{"t":"formal_parameters","s":23,"e":31,"c":[{"t":"simple_parameter","s":24,"e":30,"c":[{"t":"variable_name","s":24,"e":30,"c":[{"t":"name","s":25,"e":30,"c":[]}]}]}]},{"t":"compound_statement","s":32,"e":180,"c":[{"t":"expression_statement","s":38,"e":56,"c":[{"t":"assignment_expression","s":38,"e":55,"c":[{"t":"variable_name","s":38,"e":43,"c":[{"t":"name","s":39,"e":43,"c":[]}]},{"t":"subscript_expression","s":46,"e":55,"c":[{"t":"variable_name","s":46,"e":52,"c":[{"t":"name","s":47,"e":52,"c":[]}]},{"t":"integer","s":53,"e":54,"c":[]}]}]}]},{"t":"foreach_statement","s":61,"e":160,"c":[{"t":"variable_name","s":70,"e":76,"c":[{"t":"name","s":71,"e":76,"c":[]}]},{"t":"variable_name","s":80,"e":85,"c":[{"t":"name","s":81,"e":85,"c":[]}]},{"t":"compound_statement","s":87,"e":160,"c":[{"t":"if_statement","s":97,"e":154,"c":[{"t":"parenthesized_expression","s":100,"e":115,"c":[{"t":"binary_expression","s":101,"e":114,"c":[{"t":"variable_name","s":101,"e":106,"c":[{"t":"name","s":102,"e":106,"c":[]}]},{"t":"variable_name","s":109,"e":114,"c":[{"t":"name","s":110,"e":114,"c":[]}]}]}]},{"t":"compound_statement","s":116,"e":154,"c":[{"t":"expression_statement","s":130,"e":144,"c":[{"t":"assignment_expression","s":130,"e":143,"c":[{"t":"variable_name","s":130,"e":135,"c":[{"t":"name","s":131,"e":135,"c":[]}]},{"t":"variable_name","s":138,"e":143,"c":[{"t":"name","s":139,"e":143,"c":[]}]}]}]}]}]}]}]},{"t":"return_statement","s":165,"e":178,"c":[{"t":"variable_name","s":172,"e":177,"c":[{"t":"name","s":173,"e":177,"c":[]}]}]}]}]}]},"expect":{"types":40,"fps":[[0,"2786020761263525437"],[4,"4640658079135435750"],[7,"3840978328173412786"],[10,"3004466854141442099"],[12,"4040505821491792029"],[14,"5342328346952302583"],[17,"5425462518432190556"],[19,"4808089569834183207"],[20,"1567664203460754419"],[23,"1423395906524874469"],[24,"1282581803775313334"],[27,"3397836423725280670"],[29,"3840978328173412786"],[30,"4161428580762988582"],[34,"736996475518043196"]]}}];
+const OFFLINE_COMPARE = {"check":{"run_id":"example_disguised","url":"example/math-shell (renamed copy)","language":"python","head":"ff52efd","files_included":1,"fingerprint_count":921,"saved_at":"2026-10-19T02:45:27","commit_signals":["big_bang_commit","low_message_entropy"],"provenance_flags":["orphan_commit"],"has_code":true},"against":{"run_id":"example_original","url":"example/calculator (original)","language":"python","head":"66a7c04","files_included":1,"fingerprint_count":924,"saved_at":"2026-10-19T02:45:27","commit_signals":[],"provenance_flags":[],"has_code":true},"unique_check":424,"unique_against":430,"shared":418,"overlap":0.9858,"reverse_overlap":0.9721,"thresholds":{"medium":0.35,"high":0.6},"base_band":"high","risk_band":"high","commit_metrics":{"commit_count":1,"timespan_days":0.0,"has_big_bang":true,"low_entropy_count":1,"author_committer_match_pct":100.0},"commit_signals":[{"signal_type":"big_bang_commit","severity":"medium","description":"Repository has little or no development history."},{"signal_type":"low_message_entropy","severity":"low","description":"A high proportion of commit messages are unusually short."}],"provenance_flags":[{"flag_type":"orphan_commit","severity":"high","description":"Repository contains a single root commit with no development history."}],"regions":[{"file_a":"calculator.py","file_b":"calculator.py","lines_a":[32,69],"lines_b":[34,71],"hashes":96,"gram":["identifier","argument_list","keyword_argument","identifier","true"]},{"file_a":"calculator.py","file_b":"calculator.py","lines_a":[82,156],"lines_b":[84,165],"hashes":94,"gram":["string","string_start","string_end","attribute","identifier"]},{"file_a":"calculator.py","file_b":"calculator.py","lines_a":[296,311],"lines_b":[305,320],"hashes":32,"gram":["string_start","string_content","string_end","identifier","expression_statement"]},{"file_a":"calculator.py","file_b":"calculator.py","lines_a":[69,82],"lines_b":[71,84],"hashes":30,"gram":["string","string_start","string_content","string_end","identifier"]},{"file_a":"calculator.py","file_b":"calculator.py","lines_a":[318,341],"lines_b":[327,350],"hashes":29,"gram":["string_end","function_definition","identifier","parameters","type"]},{"file_a":"calculator.py","file_b":"calculator.py","lines_a":[292,296],"lines_b":[301,305],"hashes":20,"gram":["assignment","identifier","call","attribute","call"]},{"file_a":"calculator.py","file_b":"calculator.py","lines_a":[276,281],"lines_b":[285,290],"hashes":18,"gram":["string","string_start","interpolation","attribute","identifier"]},{"file_a":"calculator.py","file_b":"calculator.py","lines_a":[264,281],"lines_b":[273,290],"hashes":17,"gram":["identifier","block","expression_statement","assignment","pattern_list"]},{"file_a":"calculator.py","file_b":"calculator.py","lines_a":[156,169],"lines_b":[165,178],"hashes":16,"gram":["string_content","string_end","function_definition","identifier","parameters"]},{"file_a":"calculator.py","file_b":"calculator.py","lines_a":[215,237],"lines_b":[224,246],"hashes":16,"gram":["if_statement","comparison_operator","identifier","integer","block"]},{"file_a":"calculator.py","file_b":"calculator.py","lines_a":[1,27],"lines_b":[1,29],"hashes":15,"gram":["expression_statement","string","string_start","string_content","string_end"]},{"file_a":"calculator.py","file_b":"calculator.py","lines_a":[340,349],"lines_b":[349,358],"hashes":15,"gram":["call","identifier","argument_list","call","attribute"]},{"file_a":"calculator.py","file_b":"calculator.py","lines_a":[247,251],"lines_b":[256,260],"hashes":14,"gram":["block","expression_statement","assignment","identifier","call"]},{"file_a":"calculator.py","file_b":"calculator.py","lines_a":[254,258],"lines_b":[263,267],"hashes":14,"gram":["block","if_statement","comparison_operator","attribute","identifier"]},{"file_a":"calculator.py","file_b":"calculator.py","lines_a":[184,197],"lines_b":[193,206],"hashes":13,"gram":["string_start","string_content","string_end","return_statement","identifier"]},{"file_a":"calculator.py","file_b":"calculator.py","lines_a":[230,239],"lines_b":[239,248],"hashes":13,"gram":["type","identifier","type","generic_type","identifier"]},{"file_a":"calculator.py","file_b":"calculator.py","lines_a":[310,316],"lines_b":[319,325],"hashes":13,"gram":["identifier","block","return_statement","conditional_expression","call"]},{"file_a":"calculator.py","file_b":"calculator.py","lines_a":[172,179],"lines_b":[181,188],"hashes":10,"gram":["identifier","attribute","identifier","identifier","if_statement"]},{"file_a":"calculator.py","file_b":"calculator.py","lines_a":[202,214],"lines_b":[211,223],"hashes":10,"gram":["identifier","parameters","typed_parameter","identifier","type"]},{"file_a":"calculator.py","file_b":"calculator.py","lines_a":[166,186],"lines_b":[175,195],"hashes":9,"gram":["string_content","string_end","block","expression_statement","call"]},{"file_a":"calculator.py","file_b":"calculator.py","lines_a":[273,276],"lines_b":[282,285],"hashes":9,"gram":["string_start","string_content","interpolation","attribute","identifier"]},{"file_a":"calculator.py","file_b":"calculator.py","lines_a":[202,208],"lines_b":[217,223],"hashes":8,"gram":["identifier","parameters","typed_parameter","identifier","type"]},{"file_a":"calculator.py","file_b":"calculator.py","lines_a":[208,214],"lines_b":[211,217],"hashes":8,"gram":["identifier","parameters","typed_parameter","identifier","type"]},{"file_a":"calculator.py","file_b":"calculator.py","lines_a":[244,248],"lines_b":[253,257],"hashes":7,"gram":["type","identifier","type","identifier","call"]},{"file_a":"calculator.py","file_b":"calculator.py","lines_a":[179,181],"lines_b":[188,190],"hashes":6,"gram":["block","return_statement","call","identifier","argument_list"]},{"file_a":"calculator.py","file_b":"calculator.py","lines_a":[152,156],"lines_b":[164,171],"hashes":5,"gram":["parameters","identifier","type","identifier","block"]},{"file_a":"calculator.py","file_b":"calculator.py","lines_a":[261,269],"lines_b":[270,278],"hashes":5,"gram":["attribute","identifier","identifier","return_statement","conditional_expression"]},{"file_a":"calculator.py","file_b":"calculator.py","lines_a":[63,67],"lines_b":[70,71],"hashes":4,"gram":["elif_clause","boolean_operator","call","attribute","identifier"]},{"file_a":"calculator.py","file_b":"calculator.py","lines_a":[68,69],"lines_b":[65,69],"hashes":4,"gram":["elif_clause","boolean_operator","call","attribute","identifier"]},{"file_a":"calculator.py","file_b":"calculator.py","lines_a":[87,94],"lines_b":[94,102],"hashes":4,"gram":["identifier","class_definition","identifier","block","expression_statement"]},{"file_a":"calculator.py","file_b":"calculator.py","lines_a":[92,100],"lines_b":[89,96],"hashes":4,"gram":["identifier","class_definition","identifier","block","expression_statement"]},{"file_a":"calculator.py","file_b":"calculator.py","lines_a":[99,107],"lines_b":[107,115],"hashes":4,"gram":["block","expression_statement","assignment","identifier","type"]},{"file_a":"calculator.py","file_b":"calculator.py","lines_a":[105,113],"lines_b":[101,109],"hashes":4,"gram":["block","expression_statement","assignment","identifier","type"]},{"file_a":"calculator.py","file_b":"calculator.py","lines_a":[155,156],"lines_b":[161,162],"hashes":4,"gram":["parameters","identifier","type","identifier","block"]},{"file_a":"calculator.py","file_b":"calculator.py","lines_a":[165,166],"lines_b":[174,175],"hashes":4,"gram":["argument_list","if_statement","boolean_operator","comparison_operator","attribute"]},{"file_a":"calculator.py","file_b":"calculator.py","lines_a":[166,168],"lines_b":[182,184],"hashes":4,"gram":["string_content","string_end","block","expression_statement","call"]},{"file_a":"calculator.py","file_b":"calculator.py","lines_a":[172,175],"lines_b":[184,189],"hashes":4,"gram":["attribute","identifier","identifier","if_statement","comparison_operator"]},{"file_a":"calculator.py","file_b":"calculator.py","lines_a":[173,175],"lines_b":[175,177],"hashes":4,"gram":["string_content","string_end","block","expression_statement","call"]},{"file_a":"calculator.py","file_b":"calculator.py","lines_a":[175,180],"lines_b":[181,184],"hashes":4,"gram":["attribute","identifier","identifier","if_statement","comparison_operator"]},{"file_a":"calculator.py","file_b":"calculator.py","lines_a":[189,195],"lines_b":[198,204],"hashes":4,"gram":["string_start","string_content","string_end","expression_statement","assignment"]}],"region_total":141,"sources_a":{"calculator.py":"\"\"\"Expression engine for a small interactive math shell.\n\nText is scanned into lexemes, read into an expression tree, then interpreted.\n\"\"\"\n\nfrom __future__ import annotations\n\nimport math\nimport operator\nfrom dataclasses import dataclass, field\nfrom typing import Callable, Iterator, Union\n\n\nclass MathError(Exception):\n    \"\"\"Root of all user-facing math errors.\"\"\"\n\n\nclass ScanError(MathError):\n    pass\n\n\nclass SyntaxProblem(MathError):\n    pass\n\n\nclass RuntimeProblem(MathError):\n    pass\n\n\n\n\n@dataclass(frozen=True)\nclass Lexeme:\n    category: str          # NUMBER, NAME, OP, LPAREN, RPAREN, COMMA, END\n    text: str\n    pos: int\n\n\nPUNCTUATION = {\"(\": \"LPAREN\", \")\": \"RPAREN\", \",\": \"COMMA\"}\nSYMBOLS = set(\"+-*/%^\")\n\n\nclass Scanner:\n    def __init__(self, text: str) -> None:\n        self.text = text\n        self.cursor = 0\n\n    def _look(self) -> str:\n        return self.text[self.cursor] if self.cursor < len(self.text) else \"\"\n\n    def _consume(self, predicate: Callable[[str], bool]) -> str:\n        start = self.cursor\n        while self.cursor < len(self.text) and predicate(self.text[self.cursor]):\n            self.cursor += 1\n        return self.text[start:self.cursor]\n\n    def lexemes(self) -> Iterator[Lexeme]:\n        while self.cursor < len(self.text):\n            char = self._look()\n            start = self.cursor\n            if char.isspace():\n                self.cursor += 1\n            elif char.isdigit() or char == \".\":\n                text = self._consume(lambda c: c.isdigit() or c == \".\")\n                if text.count(\".\") > 1:\n                    raise ScanError(f\"malformed number '{text}' at {start}\")\n                yield Lexeme(\"NUMBER\", text, start)\n            elif char.isalpha() or char == \"_\":\n                yield Lexeme(\"NAME\", self._consume(lambda c: c.isalnum() or c == \"_\"), start)\n            elif char in SYMBOLS:\n                self.cursor += 1\n                if char == \"/\" and self._look() == \"/\":\n                    self.cursor += 1\n                    yield Lexeme(\"OP\", \"//\", start)\n                else:\n                    yield Lexeme(\"OP\", char, start)\n            elif char in PUNCTUATION:\n                self.cursor += 1\n                yield Lexeme(PUNCTUATION[char], char, start)\n            else:\n                raise ScanError(f\"unexpected character '{char}' at {start}\")\n        yield Lexeme(\"END\", \"\", self.cursor)\n\n\n\n\n@dataclass\nclass NumLit:\n    amount: float\n\n\n@dataclass\nclass Ident:\n    label: str\n\n\n@dataclass\nclass Neg:\n    operator: str\n    inner: \"Node\"\n\n\n@dataclass\nclass BinOp:\n    operator: str\n    lhs: \"Node\"\n    rhs: \"Node\"\n\n\n@dataclass\nclass FuncCall:\n    fname: str\n    params: list[\"Node\"] = field(default_factory=list)\n\n\nExpr = Union[NumLit, Ident, Neg, BinOp, FuncCall]\n\n\nclass Reader:\n    \"\"\"Precedence-climbing reader, one method per level.\"\"\"\n\n    def __init__(self, lexemes: Iterator[Lexeme]) -> None:\n        self.lexemes = list(lexemes)\n        self.pos = 0\n\n    @property\n    def head(self) -> Lexeme:\n        return self.lexemes[self.pos]\n\n    def _next(self) -> Lexeme:\n        token = self.head\n        self.pos += 1\n        return token\n\n    def _require(self, category: str) -> Lexeme:\n        if self.head.category != category:\n            raise SyntaxProblem(f\"expected {kind} at {self.current.position}, found '{self.current.text}'\")\n        return self._next()\n\n    def parse(self) -> Expr:\n        node = self._sum()\n        self._require(\"END\")\n        return node\n\n    def _chain(self, next_level: Callable[[], Expr], operators: set[str]) -> Expr:\n        node = next_level()\n        while self.head.category == \"OP\" and self.head.text in operators:\n            op = self._next().text\n            node = BinOp(op, node, next_level())\n        return node\n\n    def _sum(self) -> Expr:\n        return self._chain(self._product, {\"+\", \"-\"})\n\n    def _product(self) -> Expr:\n        return self._chain(self._signed, {\"*\", \"/\", \"//\", \"%\"})\n\n    def _signed(self) -> Expr:\n        if self.head.category == \"OP\" and self.head.text in {\"-\", \"+\"}:\n            op = self._next().text\n            return Neg(op, self._signed())\n        return self._exponent()\n\n    def _exponent(self) -> Expr:\n        base = self._atom()\n        if self.head.category == \"OP\" and self.head.text == \"^\":\n            self._next()\n            return BinOp(\"^\", base, self._signed())\n        return base\n\n    def _atom(self) -> Expr:\n        token = self.head\n        if token.category == \"NUMBER\":\n            self._next()\n            return NumLit(float(token.text))\n        if token.category == \"NAME\":\n            self._next()\n            if self.head.category == \"LPAREN\":\n                return FuncCall(token.text, self._args())\n            return Ident(token.text)\n        if token.category == \"LPAREN\":\n            self._next()\n            node = self._sum()\n            self._require(\"RPAREN\")\n            return node\n        raise SyntaxProblem(f\"unexpected '{token.text or 'end of input'}' at {token.position}\")\n\n    def _args(self) -> list[Expr]:\n        self._require(\"LPAREN\")\n        params: list[Expr] = []\n        if self.head.category != \"RPAREN\":\n            params.append(self._sum())\n            while self.head.category == \"COMMA\":\n                self._next()\n                params.append(self._sum())\n        self._require(\"RPAREN\")\n        return params\n\n\n\n\ndef _div(lhs: float, rhs: float) -> float:\n    if rhs == 0:\n        raise RuntimeProblem(\"division by zero\")\n    return lhs / rhs\n\n\ndef _floordiv(lhs: float, rhs: float) -> float:\n    if rhs == 0:\n        raise RuntimeProblem(\"division by zero\")\n    return lhs // rhs\n\n\ndef _mod(lhs: float, rhs: float) -> float:\n    if rhs == 0:\n        raise RuntimeProblem(\"modulo by zero\")\n    return lhs % rhs\n\n\nOPS: dict[str, Callable[[float, float], float]] = {\n    \"+\": operator.add,\n    \"-\": operator.sub,\n    \"*\": operator.mul,\n    \"/\": _div,\n    \"//\": _floordiv,\n    \"%\": _mod,\n    \"^\": operator.pow,\n}\n\nBUILTINS: dict[str, tuple[int, Callable[..., float]]] = {\n    # name: (minimum argument count, implementation)\n    \"sqrt\": (1, math.sqrt),\n    \"abs\": (1, abs),\n    \"round\": (1, round),\n    \"max\": (2, max),\n    \"min\": (2, min),\n}\n\nKNOWN_VALUES = {\"pi\": math.pi, \"e\": math.e}\n\n\n@dataclass\nclass Interpreter:\n    registers: dict[str, float] = field(default_factory=lambda: {\"ans\": 0.0})\n\n    def run(self, node: Expr) -> float:\n        visit = getattr(self, f\"_eval_{type(node).__name__.lower()}\")\n        return visit(node)\n\n    def _eval_numlit(self, node: NumLit) -> float:\n        return node.amount\n\n    def _eval_ident(self, node: Ident) -> float:\n        if node.label in KNOWN_VALUES:\n            return KNOWN_VALUES[node.label]\n        if node.label in self.registers:\n            return self.registers[node.label]\n        raise RuntimeProblem(f\"unknown name '{node.identifier}'\")\n\n    def _eval_neg(self, node: Neg) -> float:\n        amount = self.run(node.inner)\n        return -amount if node.operator == \"-\" else amount\n\n    def _eval_binop(self, node: BinOp) -> float:\n        lhs, rhs = self.run(node.lhs), self.run(node.rhs)\n        try:\n            return OPS[node.operator](lhs, rhs)\n        except OverflowError as exc:\n            raise RuntimeProblem(\"result too large\") from exc\n\n    def _eval_funccall(self, node: FuncCall) -> float:\n        if node.fname not in BUILTINS:\n            raise RuntimeProblem(f\"unknown function '{node.function}'\")\n        least, impl = BUILTINS[node.fname]\n        if len(node.params) < least:\n            raise RuntimeProblem(f\"{node.function} needs at least {minimum} argument(s)\")\n        amounts = [self.run(argument) for argument in node.params]\n        try:\n            return float(impl(*amounts))\n        except ValueError as exc:\n            raise RuntimeProblem(f\"{node.function}: {error}\") from exc\n\n\n\n\n@dataclass\nclass MathEngine:\n    evaluator: Interpreter = field(default_factory=Interpreter)\n    log: list[tuple[str, float]] = field(default_factory=list)\n\n    def compute(self, formula: str) -> float:\n        tree = Reader(Scanner(formula).lexemes()).parse()\n        outcome = self.evaluator.run(tree)\n        if isinstance(outcome, float) and outcome.is_integer():\n            outcome = float(int(outcome))\n        self.evaluator.registers[\"ans\"] = outcome\n        self.log.append((formula, outcome))\n        return outcome\n\n    def render_log(self) -> str:\n        if not self.log:\n            return \"(no calculations yet)\"\n        pad = max(len(formula) for formula, _ in self.log)\n        return \"\\n\".join(\n            f\"{index:>3}. {expression:<{width}} = {format_number(result)}\"\n            for cursor, (formula, outcome) in enumerate(self.log, start=1)\n        )\n\n\ndef pretty(amount: float) -> str:\n    return str(int(amount)) if float(amount).is_integer() else f\"{value:.10g}\"\n\n\nMENU = {\n    \"help\": \"show this message\",\n    \"history\": \"list previous calculations\",\n    \"clear\": \"forget history and reset ans\",\n    \"quit\": \"leave the calculator\",\n}\n\n\ndef main() -> None:\n    engine = MathEngine()\n    print(\"Math shell. Enter help for the menu.\")\n    while True:\n        try:\n            entry = input(\"> \").strip()\n        except (EOFError, KeyboardInterrupt):\n            print()\n            break\n        if not entry:\n            continue\n        if entry == \"quit\":\n            break\n        if entry == \"help\":\n            for name, description in MENU.items():\n                print(f\"  {name:<8} {description}\")\n            continue\n        if entry == \"history\":\n            print(engine.render_log())\n            continue\n        if entry == \"clear\":\n            engine = MathEngine()\n            print(\"cleared\")\n            continue\n        try:\n            print(pretty(engine.compute(entry)))\n        except MathError as exc:\n            print(f\"error: {error}\")\n\n\n    main()"},"sources_b":{"calculator.py":"\"\"\"A deliberately over-engineered command-line calculator.\n\nPipeline: text -> tokens (Lexer) -> syntax tree (Parser) -> number (Evaluator).\nSupports + - * / // % ^, parentheses, unary minus, the constants pi and e,\nthe functions sqrt/abs/round/max/min, and `ans` (the previous result).\n\"\"\"\n\nfrom __future__ import annotations\n\nimport math\nimport operator\nfrom dataclasses import dataclass, field\nfrom typing import Callable, Iterator, Union\n\n\nclass CalculatorError(Exception):\n    \"\"\"Base class for every error the calculator reports to the user.\"\"\"\n\n\nclass LexerError(CalculatorError):\n    pass\n\n\nclass ParseError(CalculatorError):\n    pass\n\n\nclass EvaluationError(CalculatorError):\n    pass\n\n\n# ---------------------------------------------------------------- tokens\n\n@dataclass(frozen=True)\nclass Token:\n    kind: str          # NUMBER, NAME, OP, LPAREN, RPAREN, COMMA, END\n    text: str\n    position: int\n\n\nSINGLE_CHAR_TOKENS = {\"(\": \"LPAREN\", \")\": \"RPAREN\", \",\": \"COMMA\"}\nOPERATOR_CHARS = set(\"+-*/%^\")\n\n\nclass Lexer:\n    def __init__(self, source: str) -> None:\n        self.source = source\n        self.index = 0\n\n    def _peek(self) -> str:\n        return self.source[self.index] if self.index < len(self.source) else \"\"\n\n    def _read_while(self, predicate: Callable[[str], bool]) -> str:\n        start = self.index\n        while self.index < len(self.source) and predicate(self.source[self.index]):\n            self.index += 1\n        return self.source[start:self.index]\n\n    def tokens(self) -> Iterator[Token]:\n        while self.index < len(self.source):\n            char = self._peek()\n            start = self.index\n            if char.isspace():\n                self.index += 1\n            elif char.isdigit() or char == \".\":\n                text = self._read_while(lambda c: c.isdigit() or c == \".\")\n                if text.count(\".\") > 1:\n                    raise LexerError(f\"malformed number '{text}' at {start}\")\n                yield Token(\"NUMBER\", text, start)\n            elif char.isalpha() or char == \"_\":\n                yield Token(\"NAME\", self._read_while(lambda c: c.isalnum() or c == \"_\"), start)\n            elif char in OPERATOR_CHARS:\n                self.index += 1\n                if char == \"/\" and self._peek() == \"/\":\n                    self.index += 1\n                    yield Token(\"OP\", \"//\", start)\n                else:\n                    yield Token(\"OP\", char, start)\n            elif char in SINGLE_CHAR_TOKENS:\n                self.index += 1\n                yield Token(SINGLE_CHAR_TOKENS[char], char, start)\n            else:\n                raise LexerError(f\"unexpected character '{char}' at {start}\")\n        yield Token(\"END\", \"\", self.index)\n\n\n# ----------------------------------------------------------------- syntax tree\n\n@dataclass\nclass Number:\n    value: float\n\n\n@dataclass\nclass Name:\n    identifier: str\n\n\n@dataclass\nclass Unary:\n    operator: str\n    operand: \"Node\"\n\n\n@dataclass\nclass Binary:\n    operator: str\n    left: \"Node\"\n    right: \"Node\"\n\n\n@dataclass\nclass Call:\n    function: str\n    arguments: list[\"Node\"] = field(default_factory=list)\n\n\nNode = Union[Number, Name, Unary, Binary, Call]\n\n\nclass Parser:\n    \"\"\"Recursive descent with one function per precedence level.\n\n    expression := term (('+' | '-') term)*\n    term       := unary (('*' | '/' | '//' | '%') unary)*\n    unary      := ('-' | '+') unary | power   # so -2 ^ 2 == -(2 ^ 2)\n    power      := primary ('^' unary)?        # right-associative, allows 2 ^ -1\n    primary    := NUMBER | NAME | NAME '(' args ')' | '(' expression ')'\n    \"\"\"\n\n    def __init__(self, tokens: Iterator[Token]) -> None:\n        self.tokens = list(tokens)\n        self.position = 0\n\n    @property\n    def current(self) -> Token:\n        return self.tokens[self.position]\n\n    def _advance(self) -> Token:\n        token = self.current\n        self.position += 1\n        return token\n\n    def _expect(self, kind: str) -> Token:\n        if self.current.kind != kind:\n            raise ParseError(f\"expected {kind} at {self.current.position}, found '{self.current.text}'\")\n        return self._advance()\n\n    def parse(self) -> Node:\n        node = self._expression()\n        self._expect(\"END\")\n        return node\n\n    def _binary_level(self, next_level: Callable[[], Node], operators: set[str]) -> Node:\n        node = next_level()\n        while self.current.kind == \"OP\" and self.current.text in operators:\n            symbol = self._advance().text\n            node = Binary(symbol, node, next_level())\n        return node\n\n    def _expression(self) -> Node:\n        return self._binary_level(self._term, {\"+\", \"-\"})\n\n    def _term(self) -> Node:\n        return self._binary_level(self._unary, {\"*\", \"/\", \"//\", \"%\"})\n\n    def _unary(self) -> Node:\n        if self.current.kind == \"OP\" and self.current.text in {\"-\", \"+\"}:\n            symbol = self._advance().text\n            return Unary(symbol, self._unary())\n        return self._power()\n\n    def _power(self) -> Node:\n        base = self._primary()\n        if self.current.kind == \"OP\" and self.current.text == \"^\":\n            self._advance()\n            return Binary(\"^\", base, self._unary())\n        return base\n\n    def _primary(self) -> Node:\n        token = self.current\n        if token.kind == \"NUMBER\":\n            self._advance()\n            return Number(float(token.text))\n        if token.kind == \"NAME\":\n            self._advance()\n            if self.current.kind == \"LPAREN\":\n                return Call(token.text, self._arguments())\n            return Name(token.text)\n        if token.kind == \"LPAREN\":\n            self._advance()\n            node = self._expression()\n            self._expect(\"RPAREN\")\n            return node\n        raise ParseError(f\"unexpected '{token.text or 'end of input'}' at {token.position}\")\n\n    def _arguments(self) -> list[Node]:\n        self._expect(\"LPAREN\")\n        arguments: list[Node] = []\n        if self.current.kind != \"RPAREN\":\n            arguments.append(self._expression())\n            while self.current.kind == \"COMMA\":\n                self._advance()\n                arguments.append(self._expression())\n        self._expect(\"RPAREN\")\n        return arguments\n\n\n# ------------------------------------------------------------------ evaluation\n\ndef _safe_divide(left: float, right: float) -> float:\n    if right == 0:\n        raise EvaluationError(\"division by zero\")\n    return left / right\n\n\ndef _safe_floor_divide(left: float, right: float) -> float:\n    if right == 0:\n        raise EvaluationError(\"division by zero\")\n    return left // right\n\n\ndef _safe_modulo(left: float, right: float) -> float:\n    if right == 0:\n        raise EvaluationError(\"modulo by zero\")\n    return left % right\n\n\nBINARY_OPERATIONS: dict[str, Callable[[float, float], float]] = {\n    \"+\": operator.add,\n    \"-\": operator.sub,\n    \"*\": operator.mul,\n    \"/\": _safe_divide,\n    \"//\": _safe_floor_divide,\n    \"%\": _safe_modulo,\n    \"^\": operator.pow,\n}\n\nFUNCTIONS: dict[str, tuple[int, Callable[..., float]]] = {\n    # name: (minimum argument count, implementation)\n    \"sqrt\": (1, math.sqrt),\n    \"abs\": (1, abs),\n    \"round\": (1, round),\n    \"max\": (2, max),\n    \"min\": (2, min),\n}\n\nCONSTANTS = {\"pi\": math.pi, \"e\": math.e}\n\n\n@dataclass\nclass Evaluator:\n    memory: dict[str, float] = field(default_factory=lambda: {\"ans\": 0.0})\n\n    def evaluate(self, node: Node) -> float:\n        handler = getattr(self, f\"_eval_{type(node).__name__.lower()}\")\n        return handler(node)\n\n    def _eval_number(self, node: Number) -> float:\n        return node.value\n\n    def _eval_name(self, node: Name) -> float:\n        if node.identifier in CONSTANTS:\n            return CONSTANTS[node.identifier]\n        if node.identifier in self.memory:\n            return self.memory[node.identifier]\n        raise EvaluationError(f\"unknown name '{node.identifier}'\")\n\n    def _eval_unary(self, node: Unary) -> float:\n        value = self.evaluate(node.operand)\n        return -value if node.operator == \"-\" else value\n\n    def _eval_binary(self, node: Binary) -> float:\n        left, right = self.evaluate(node.left), self.evaluate(node.right)\n        try:\n            return BINARY_OPERATIONS[node.operator](left, right)\n        except OverflowError as error:\n            raise EvaluationError(\"result too large\") from error\n\n    def _eval_call(self, node: Call) -> float:\n        if node.function not in FUNCTIONS:\n            raise EvaluationError(f\"unknown function '{node.function}'\")\n        minimum, implementation = FUNCTIONS[node.function]\n        if len(node.arguments) < minimum:\n            raise EvaluationError(f\"{node.function} needs at least {minimum} argument(s)\")\n        values = [self.evaluate(argument) for argument in node.arguments]\n        try:\n            return float(implementation(*values))\n        except ValueError as error:\n            raise EvaluationError(f\"{node.function}: {error}\") from error\n\n\n# ---------------------------------------------------------------- front end\n\n@dataclass\nclass Calculator:\n    evaluator: Evaluator = field(default_factory=Evaluator)\n    history: list[tuple[str, float]] = field(default_factory=list)\n\n    def calculate(self, expression: str) -> float:\n        tree = Parser(Lexer(expression).tokens()).parse()\n        result = self.evaluator.evaluate(tree)\n        if isinstance(result, float) and result.is_integer():\n            result = float(int(result))\n        self.evaluator.memory[\"ans\"] = result\n        self.history.append((expression, result))\n        return result\n\n    def describe_history(self) -> str:\n        if not self.history:\n            return \"(no calculations yet)\"\n        width = max(len(expression) for expression, _ in self.history)\n        return \"\\n\".join(\n            f\"{index:>3}. {expression:<{width}} = {format_number(result)}\"\n            for index, (expression, result) in enumerate(self.history, start=1)\n        )\n\n\ndef format_number(value: float) -> str:\n    return str(int(value)) if float(value).is_integer() else f\"{value:.10g}\"\n\n\nCOMMANDS = {\n    \"help\": \"show this message\",\n    \"history\": \"list previous calculations\",\n    \"clear\": \"forget history and reset ans\",\n    \"quit\": \"leave the calculator\",\n}\n\n\ndef main() -> None:\n    calculator = Calculator()\n    print(\"Calculator ready. Type 'help' for commands.\")\n    while True:\n        try:\n            line = input(\"> \").strip()\n        except (EOFError, KeyboardInterrupt):\n            print()\n            break\n        if not line:\n            continue\n        if line == \"quit\":\n            break\n        if line == \"help\":\n            for name, description in COMMANDS.items():\n                print(f\"  {name:<8} {description}\")\n            continue\n        if line == \"history\":\n            print(calculator.describe_history())\n            continue\n        if line == \"clear\":\n            calculator = Calculator()\n            print(\"cleared\")\n            continue\n        try:\n            print(format_number(calculator.calculate(line)))\n        except CalculatorError as error:\n            print(f\"error: {error}\")\n\n\n    main()"}};
+
+/* ---------------------------------------------------------------- utils */
+const $ = s => document.querySelector(s);
+const esc = s => s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function sha256hex(str){
+  const K=[0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];
+  const bytes=new TextEncoder().encode(str), l=bytes.length, n=((l+9+63)>>6)<<6, m=new Uint8Array(n);
+  m.set(bytes); m[l]=0x80; const bits=l*8; for(let i=0;i<4;i++) m[n-1-i]=(bits>>>(8*i))&255;
+  let h=[0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];
+  const w=new Uint32Array(64), r=(x,y)=>(x>>>y)|(x<<(32-y));
+  for(let o=0;o<n;o+=64){
+    for(let i=0;i<16;i++) w[i]=(m[o+i*4]<<24)|(m[o+i*4+1]<<16)|(m[o+i*4+2]<<8)|m[o+i*4+3];
+    for(let i=16;i<64;i++){const a=w[i-15],b=w[i-2];w[i]=(w[i-16]+(r(a,7)^r(a,18)^(a>>>3))+w[i-7]+(r(b,17)^r(b,19)^(b>>>10)))>>>0;}
+    let [a,b,c,d,e,f,g,hh]=h;
+    for(let i=0;i<64;i++){
+      const t1=(hh+(r(e,6)^r(e,11)^r(e,25))+((e&f)^(~e&g))+K[i]+w[i])>>>0, t2=((r(a,2)^r(a,13)^r(a,22))+((a&b)^(a&c)^(b&c)))>>>0;
+      hh=g;g=f;f=e;e=(d+t1)>>>0;d=c;c=b;b=a;a=(t1+t2)>>>0;
+    }
+    h=h.map((v,i)=>(v+[a,b,c,d,e,f,g,hh][i])>>>0);
+  }
+  return h.map(v=>v.toString(16).padStart(8,'0')).join('');
+}
+
+/* ---------------------------------------------------------- pipeline (JS mirror) */
+const KG = 5, WIN = 4, MASK = (1n << 63n) - 1n;
+const BOILER = [/^\s*(#include\s+<.*>|using\s+namespace\s+\w+;?)\s*$/, /^\s*(if __name__ == ['"]__main__['"]:|public static void main\s*\()/];
+
+function prepare(sample){
+  const nodes = [];
+  (function visit(n, depth, parent){
+    const idx = nodes.length;
+    nodes.push({t:n.t, s:n.s, e:n.e, d:depth, parent, kids:[]});
+    if (parent >= 0) nodes[parent].kids.push(idx);
+    n.c.forEach(c => visit(c, depth+1, idx));
+  })(sample.ast, 0, -1);
+  const types = nodes.map(n => n.t);
+  const grams = [];
+  for (let i = 0; i + KG <= types.length; i++){
+    const joined = types.slice(i, i+KG).join('|'), hex = sha256hex(joined);
+    grams.push({joined, hex, val: BigInt('0x'+hex.slice(0,16)) & MASK});
+  }
+  const windows = [], selected = new Map();
+  if (grams.length){
+    for (let st = 0; st < Math.max(1, grams.length - WIN + 1); st++){
+      const end = Math.min(st + WIN, grams.length);
+      let mi = st; for (let j = st; j < end; j++) if (grams[j].val < grams[mi].val) mi = j;
+      const isNew = !selected.has(mi); if (isNew) selected.set(mi, grams[mi].val);
+      windows.push({st, end, mi, isNew, count: selected.size});
+    }
+  }
+  const fps = [...selected.entries()].map(([pos, val]) => ({pos, val}));
+  const lineStarts = [0]; for (let i = 0; i < sample.filtered.length; i++) if (sample.filtered[i] === '\n') lineStarts.push(i+1);
+  const lineOf = off => { let lo = 0, hi = lineStarts.length-1; while (lo < hi){ const mid = (lo+hi+1)>>1; if (lineStarts[mid] <= off) lo = mid; else hi = mid-1; } return lo+1; };
+  return {sample, nodes, types, grams, windows, fps, lineOf};
+}
+
+/* ---------------------------------------------------------------- AST view */
+const PHASES = [
+  {n:'Strip boilerplate', d:'remove_boilerplate()'},
+  {n:'Walk the AST', d:'normalized_ast() · pre-order'},
+  {n:'Hash 5-grams', d:'SHA-256 → 63-bit int'},
+  {n:'Winnow', d:'keep min of every 4'},
+  {n:'Fingerprints', d:'what gets stored'},
+];
+let P, steps = [], cur = 0, timer = null;
+const cache = {};
+const prep = id => cache[id] || (cache[id] = prepare(SAMPLES.find(s => s.id === id)));
+
+function buildSteps(){
+  steps = [{ph:0}];
+  P.nodes.forEach((_, i) => steps.push({ph:1, i}));
+  P.grams.forEach((_, i) => steps.push({ph:2, i}));
+  P.windows.forEach((w, i) => steps.push({ph:3, i}));
+  steps.push({ph:4});
+}
+
+function loadSample(id){
+  P = prep(id); buildSteps(); cur = 0;
+  const s = P.sample;
+  // tree rows
+  $('#tree').innerHTML = P.nodes.map((n, i) => {
+    const a = P.lineOf(n.s), b = P.lineOf(Math.max(n.s, n.e-1));
+    const snip = s.filtered.slice(n.s, n.e).split('\n')[0].slice(0, 34);
+    return `<div class="row" data-i="${i}"><span class="ind" style="width:${n.d*14}px"></span><span class="ty">${esc(n.t)}</span><span class="ln">L${a}${b!==a?'–'+b:''}</span><span class="snip">${esc(snip)}</span></div>`;
+  }).join('');
+  $('#types').innerHTML = P.types.map((t, i) => `<span class="chip" data-i="${i}" hidden><span class="i">${i}</span>${esc(t)}</span>`).join('');
+  const maxH = 70;
+  $('#bars').innerHTML = P.grams.map((g, i) => {
+    const frac = Number(g.val >> 40n) / 2**23;
+    return `<div class="bar" data-i="${i}" style="height:${6 + Math.round(frac*maxH*0.88)}px" title="position ${i}: ${g.val}"></div>`;
+  }).join('');
+  $('#rail').innerHTML = PHASES.map((p, i) => `<button class="phase" data-ph="${i}"><b><span class="num">${i+1}</span>${p.n}</b><span>${p.d}</span></button>`).join('');
+  render();
+}
+
+function codeHTML(text, s, e, cls){
+  if (s == null) return esc(text);
+  return esc(text.slice(0, s)) + `<mark class="${cls||''}">` + esc(text.slice(s, e)) + '</mark>' + esc(text.slice(e));
+}
+function setCode(text, html){
+  const lines = text.split('\n').length - (text.endsWith('\n') ? 1 : 0);
+  $('#gutter').textContent = Array.from({length: Math.max(lines,1)}, (_, i) => i+1).join('\n');
+  $('#code').innerHTML = html;
+  const m = $('#code mark'), box = $('#codeScroll');
+  if (m){ const top = m.offsetTop - box.offsetTop; if (top < box.scrollTop + 20 || top > box.scrollTop + box.clientHeight - 60) box.scrollTop = top - 80; }
+}
+function scrollRow(i){
+  const r = $(`#tree .row[data-i="${i}"]`), box = $('#treeScroll'); if (!r) return;
+  const top = r.offsetTop - box.offsetTop;
+  if (top < box.scrollTop + 10 || top > box.scrollTop + box.clientHeight - 40) box.scrollTop = top - box.clientHeight/3;
+}
+function kspan(i){ const ns = P.nodes.slice(i, i+KG); return [Math.min(...ns.map(n=>n.s)), Math.max(...ns.map(n=>n.e))]; }
+const short = v => { const s = v.toString(); return s.length > 10 ? '…' + s.slice(-8) : s; };
+
+function render(){
+  const st = steps[cur], s = P.sample;
+  $('#counter').textContent = `step ${cur+1} / ${steps.length}`;
+  document.querySelectorAll('.phase').forEach((el, i) => { el.classList.toggle('active', i === st.ph); el.classList.toggle('done', i < st.ph); });
+  $('#bBack').disabled = cur === 0; $('#bStep').disabled = cur === steps.length-1;
+
+  const rows = $('#tree').children, chips = $('#types').children, bars = $('#bars').children;
+  const visitedUpTo = st.ph === 0 ? -1 : st.ph === 1 ? st.i : P.nodes.length-1;
+  for (let i = 0; i < rows.length; i++){
+    rows[i].className = 'row' + (i <= visitedUpTo ? ' vis' : '') + (st.ph === 1 && i === st.i ? ' cur' : '');
+    chips[i].hidden = i > visitedUpTo;
+    chips[i].className = 'chip' + (st.ph === 1 && i === st.i ? ' cur' : '');
+  }
+  let kIdx = st.ph === 2 ? st.i : st.ph === 3 ? P.windows[st.i].mi : null;
+  if (kIdx != null) for (let i = kIdx; i < kIdx+KG; i++){ rows[i].classList.add('kg'); chips[i].classList.add('kg'); }
+  const hashUpTo = st.ph < 2 ? -1 : st.ph === 2 ? st.i : P.grams.length-1;
+  const selCount = st.ph === 3 ? P.windows[st.i].count : st.ph === 4 ? P.fps.length : 0;
+  const selSet = new Set(P.fps.slice(0, selCount).map(f => f.pos));
+  const w = st.ph === 3 ? P.windows[st.i] : null;
+  for (let i = 0; i < bars.length; i++){
+    let c = 'bar';
+    if (i > hashUpTo) c += ' hide';
+    if (st.ph === 2 && i === st.i) c += ' cur';
+    if (selSet.has(i)) c += ' sel';
+    if (w && i >= w.st && i < w.end) c += (i === w.mi ? ' min' : ' win');
+    bars[i].className = c;
+  }
+  const focusBar = st.ph === 2 ? st.i : w ? w.st : null;
+  if (focusBar != null && bars[focusBar]){ const bx = $('#bars'); const x = bars[focusBar].offsetLeft - bx.offsetLeft; if (x < bx.scrollLeft || x > bx.scrollLeft + bx.clientWidth - 50) bx.scrollLeft = x - bx.clientWidth/2; }
+
+  $('#typesCount').textContent = `${visitedUpTo+1} / ${P.types.length}`;
+  $('#hashCount').textContent = `${hashUpTo+1} / ${P.grams.length}` + (selCount ? ` · ${selCount} kept` : '');
+  $('#hashBlock').style.opacity = st.ph < 2 ? .4 : 1;
+
+  // ---- code + note + detail per phase
+  let note = '', detail = '', result = '';
+  if (st.ph === 0){
+    const lines = s.source.split('\n'); let removed = 0;
+    const html = lines.map(l => { if (BOILER.some(r => r.test(l))){ removed++; return `<span class="rm">${esc(l)}</span>`; } return esc(l); }).join('\n');
+    setCode(s.source, html);
+    $('#codeSub').textContent = 'as submitted';
+    note = removed
+      ? `Before parsing, <code>remove_boilerplate()</code> drops lines every student would write anyway. Here <b>${removed}</b> line${removed>1?'s are':' is'} crossed out. They can't count as copying, because everyone has them.`
+      : `Before parsing, <code>remove_boilerplate()</code> drops lines like <code>#include &lt;stdio.h&gt;</code> or <code>if __name__ == "__main__":</code>. This sample has none, so the parser sees it unchanged. Press <b>Play</b> to start the walk.`;
+    detail = `<div class="box"><div class="k">Patterns removed (BOILERPLATE_PATTERNS)</div><div class="v">#include &lt;…&gt; · using namespace … · if __name__ == "__main__": · public static void main(</div></div>`;
+  } else {
+    $('#codeSub').textContent = 'what the parser sees';
+    if (st.ph === 1){
+      const n = P.nodes[st.i];
+      setCode(s.filtered, codeHTML(s.filtered, n.s, n.e));
+      scrollRow(st.i);
+      const text = s.filtered.slice(n.s, n.e);
+      const parent = n.parent >= 0 ? P.nodes[n.parent].t : null;
+      if (st.i === 0) note = `The walk starts at the root, <code>${esc(n.t)}</code>. <code>visit()</code> appends the node's <b>type</b>, then visits each named child in order, going as deep as possible before moving sideways (pre-order, depth-first).`;
+      else if (n.t === 'identifier' || n.t === 'name' || n.t === 'variable_name' || n.t === 'type_identifier')
+        note = `This is <code>${esc(text.slice(0,40))}</code>, but the list only stores <code>${esc(n.t)}</code>. Variable and function names are thrown away. That is why renaming everything does not hide copied code.`;
+      else if (/string|integer|float|number|literal/.test(n.t))
+        note = `A literal value (<code>${esc(text.slice(0,30))}</code>). Again only its kind, <code>${esc(n.t)}</code>, is kept. Changing a message or a number does not change the fingerprint.`;
+      else if (n.kids.length === 0)
+        note = `<code>${esc(n.t)}</code> has no named children, so the walk climbs back up and continues with the next sibling of <code>${esc(parent)}</code>.`;
+      else
+        note = `Visiting <code>${esc(n.t)}</code> (depth ${n.d}, child of <code>${esc(parent)}</code>). Its type goes on the list, then its ${n.kids.length} named child${n.kids.length>1?'ren are':' is'} visited next. Punctuation and operators like <code>+</code> or <code>/</code> are unnamed nodes, so they are skipped.`;
+      detail = `<div class="box"><div class="k">node.type appended</div><div class="v"><b>${esc(n.t)}</b> · position ${st.i}</div><div class="k" style="margin-top:6px">source text it covers</div><div class="v">${esc(text.length > 90 ? text.slice(0,90)+'…' : text)}</div></div>`;
+    } else if (st.ph === 2){
+      const g = P.grams[st.i], [a, b] = kspan(st.i);
+      setCode(s.filtered, codeHTML(s.filtered, a, b, 'k'));
+      scrollRow(st.i);
+      note = st.i === 0
+        ? `Now <code>winnow()</code> slides a window of <b>${KG}</b> consecutive node types along the list. Each group of 5 is joined with <code>|</code> and hashed. One node type alone says little; five in a row describe a small piece of structure.`
+        : `5-gram at position <b>${st.i}</b>. The hash keeps the first 16 hex digits of SHA-256, then clears the top bit with <code>HASH_MASK</code> so the number fits a signed 64-bit PostgreSQL <code>BIGINT</code>.`;
+      detail = `<div class="box"><div class="k">joined 5-gram</div><div class="v">${esc(g.joined)}</div>
+        <div class="k" style="margin-top:6px">sha256(…).hexdigest()</div><div class="v"><b>${g.hex.slice(0,16)}</b>${g.hex.slice(16)}</div>
+        <div class="k" style="margin-top:6px">int(first 16 hex, 16) &amp; HASH_MASK</div><div class="v"><b>${g.val}</b></div></div>`;
+    } else if (st.ph === 3){
+      const g = P.grams[w.mi], [a, b] = kspan(w.mi);
+      setCode(s.filtered, codeHTML(s.filtered, a, b, 'k'));
+      scrollRow(w.mi);
+      note = st.i === 0
+        ? `Keeping every hash would be too much to store and compare. Winnowing looks at <b>${WIN}</b> hashes at a time and keeps only the smallest. Because neighbouring windows often share the same minimum, far fewer hashes survive, yet any copied stretch long enough is still guaranteed to leave at least one match.`
+        : w.isNew
+          ? `Window ${w.st}–${w.end-1}: the smallest hash is at position <b>${w.mi}</b>. It is new, so it is kept as a fingerprint (${w.count} so far).`
+          : `Window ${w.st}–${w.end-1}: the smallest is still position <b>${w.mi}</b>, which was already kept. <code>setdefault</code> skips it, which is how the count stays small.`;
+      detail = `<div class="box"><div class="k">window ${w.st}–${w.end-1} hashes</div><div class="v">${P.grams.slice(w.st, w.end).map((x, j) => (w.st+j === w.mi ? `<b>${x.val}</b>` : `${x.val}`)).join('<br>')}</div>
+        <div class="k" style="margin-top:6px">result</div><div class="v">${w.isNew ? '<b>kept</b>' : 'already kept · skipped'} → {hash_value: ${g.val}, window_position: ${w.mi}}</div></div>`;
+    } else {
+      setCode(s.filtered, codeHTML(s.filtered));
+      const exp = s.expect.fps, ok = exp.length === P.fps.length && exp.every(([pos, v], i) => P.fps[i].pos === pos && P.fps[i].val.toString() === v);
+      const pair = s.pair ? prep(s.pair) : null;
+      const pairVals = pair ? new Set(pair.fps.map(f => f.val.toString())) : null;
+      const shared = pair ? P.fps.filter(f => pairVals.has(f.val.toString())).length : 0;
+      note = `Done. ${P.nodes.length} nodes became ${P.grams.length} hashes, and winnowing kept <b>${P.fps.length}</b>. Each is saved as <code>{file_path, hash_value, window_position}</code> and compared against other submissions' fingerprints.`
+        + (pair ? (s.id.startsWith('own-') ? ` <b>${shared} of ${P.fps.length}</b> fingerprints also appear in the other version. Names never enter the list, so only structural changes lower this.` : ` The paired sample was renamed throughout, yet <b>${shared} of ${P.fps.length}</b> fingerprints are identical, because names never entered the list.`) : ' Click a fingerprint to see the code it came from.');
+      result = `<div class="verify ${ok?'ok':'bad'}">${ok ? '✓' : '✗'} ${ok ? `Matches the Python pipeline output exactly (${exp.length}/${exp.length} fingerprints)` : 'Does not match the Python output'}</div>
+        <div><div class="lbl">fingerprints <em>${P.fps.length} kept of ${P.grams.length}</em></div>
+        <div class="chips">${P.fps.map(f => `<span class="chip fp ${pair ? (pairVals.has(f.val.toString()) ? 'shared' : 'miss') : ''}" data-pos="${f.pos}" title="${f.val}"><span class="i">@${f.pos}</span>${short(f.val)}</span>`).join('')}</div></div>`
+        + (pair ? `<div><div class="lbl">shared with “${esc(pair.sample.label.split('· ')[1])}” <em>${shared}/${P.fps.length}</em></div><div class="meter"><div style="width:${P.fps.length ? 100*shared/P.fps.length : 0}%"></div></div>
+          <div class="legend"><span><i style="background:var(--ok)"></i>also in the other version</span><span><i style="background:var(--warn)"></i>only in this one</span></div>
+          <p class="empty" style="margin:6px 0 0">This is a raw shared-hash count for teaching. The real score is computed in <code>db.save_analysis</code> against stored peer submissions.</p>
+          <button class="btn" id="swapPair" style="margin-top:8px">Walk the other version →</button></div>` : '');
+    }
+  }
+  $('#note').innerHTML = note;
+  $('#detail').innerHTML = detail;
+  $('#result').innerHTML = result;
+  const sw = $('#swapPair'); if (sw) sw.onclick = () => { $('#sampleSel').value = s.pair; loadSample(s.pair); };
+  document.querySelectorAll('.chip.fp').forEach(c => c.onclick = () => {
+    const pos = +c.dataset.pos, [a, b] = kspan(pos);
+    setCode(s.filtered, codeHTML(s.filtered, a, b, 'k'));
+    for (const r of $('#tree').children) r.classList.remove('kg');
+    for (let i = pos; i < pos+KG; i++) $('#tree').children[i].classList.add('kg');
+    scrollRow(pos);
+  });
+}
+
+function go(i){ cur = Math.max(0, Math.min(steps.length-1, i)); render(); }
+function delay(){ const v = +$('#speed').value; return Math.round(900 * Math.pow(0.955, v)); }
+function play(){
+  if (timer){ stop(); return; }
+  if (cur === steps.length-1) cur = 0;
+  $('#bPlay').textContent = '❚❚ Pause';
+  const tick = () => { if (cur >= steps.length-1){ stop(); return; } go(cur+1); timer = setTimeout(tick, delay()); };
+  timer = setTimeout(tick, 0);
+}
+function stop(){ clearTimeout(timer); timer = null; $('#bPlay').textContent = '▶ Play'; }
+
+renderSampleOptions();
+$('#sampleSel').onchange = e => {
+  stop();
+  const v = e.target.value;
+  $('#ownPanel').hidden = !(v === '__own' || v.startsWith('own-'));
+  if (v === '__own') { const a = SAMPLES.find(s => s.id === 'own-a'); if (a) { e.target.value = 'own-a'; loadSample('own-a'); } return; }
+  loadSample(v);
+};
+$('#bPlay').onclick = play;
+$('#bStep').onclick = () => { stop(); go(cur+1); };
+$('#bBack').onclick = () => { stop(); go(cur-1); };
+$('#bReset').onclick = () => { stop(); go(0); };
+$('#rail').onclick = e => { const b = e.target.closest('.phase'); if (!b) return; stop(); go(steps.findIndex(s => s.ph === +b.dataset.ph)); };
+$('#tree').onclick = e => { const r = e.target.closest('.row'); if (!r) return; stop(); go(steps.findIndex(s => s.ph === 1 && s.i === +r.dataset.i)); };
+document.addEventListener('keydown', e => {
+  if ($('#view-ast').hidden || /INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) return;
+  if (e.key === ' '){ e.preventDefault(); play(); }
+  else if (e.key === 'ArrowRight'){ stop(); go(cur+1); }
+  else if (e.key === 'ArrowLeft'){ stop(); go(cur-1); }
+  else if (e.key === 'Home'){ stop(); go(0); }
+});
+loadSample(SAMPLES[0].id);
+
+/* ---------------------------------------------------------------- tabs + theme */
+function openTab(view){
+  document.querySelectorAll('.tab').forEach(x => x.setAttribute('aria-selected', x.dataset.view === view));
+  document.querySelectorAll('.view').forEach(v => v.hidden = v.id !== 'view-' + view);
+  stop(); if (typeof cStop === 'function' && cTimer) cStop();
+}
+document.querySelectorAll('.tab').forEach(t => t.onclick = () => openTab(t.dataset.view));
+$('#themeBtn').onclick = () => {
+  const root = document.documentElement, dark = root.dataset.theme ? root.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+  root.dataset.theme = dark ? 'light' : 'dark';
+};
+
+/* ================================================================ CONSOLE */
+const HOST_LOGS = 'C:\\Users\\Vince PC\\Documents\\GitHub\\OriginTrace\\logs';
+const hex = n => Array.from(crypto.getRandomValues(new Uint8Array(n)), b => b.toString(16).padStart(2,'0')).join('');
+const pad = (n, w=2) => String(n).padStart(w, '0');
+const stamp = d => `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.${pad(d.getMilliseconds(),3)}`;
+const runId = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}_${hex(3)}`;
+function fmt(v){                                   // mirrors logger._format
+  if (typeof v === 'boolean') return v ? '1' : '0';
+  let t = String(v).split(/\s+/).filter(Boolean).join(' ').replace(/:\/\/[^\/\s@]+@/g, '://***@');
+  if (t.length > 300) t = t.slice(0, 297) + '...';
+  return /^[^\s="]+$/.test(t) ? t : '"' + t.replace(/"/g, "'") + '"';
+}
+const fieldsText = f => Object.entries(f).filter(([, v]) => v !== null && v !== undefined && v !== '').map(([k, v]) => `${k}=${fmt(v)}`).join(' ');
+
+function parseLine(line){
+  const m = line.match(/^(\d\d:\d\d:\d\d\.\d{3}) ([IWE]) (\S+) ?(.*)$/); if (!m) return null;
+  const fields = {}; const re = /(\w+)=("(?:[^"]*)"|\S+)/g; let x;
+  while ((x = re.exec(m[4]))) fields[x[1]] = x[2].startsWith('"') ? x[2].slice(1, -1) : x[2];
+  return {time: m[1], level: m[2], event: m[3], fields, rest: m[4]};
+}
+
+function explain(kind, p){
+  const f = p.fields, E = p.event;
+  if (kind === 'clone'){
+    if (E === 'start') return `<b>git clone is starting.</b> The URL was accepted and <code>git clone -- ${esc(f.url||'')}</code> runs into a brand-new temporary folder inside the analysis container${f.path ? `: <code>${esc(f.path)}</code>` : ''}. Any <code>user:token@</code> in the URL is masked as <code>***</code> before it is written.`;
+    if (E === 'done') return `<b>The clone worked.</b> HEAD is commit <code>${esc(f.head||'?')}</code>; <code>${esc(f.files||'?')}</code> files (${esc(f.kb||'?')} KB, not counting <code>.git</code>) were downloaded in ${esc(f.ms||'?')} ms. These numbers come from <code>clone_summary()</code>.`;
+    if (E === 'fail') return `<b>The clone failed.</b> ${f.rc ? `git exited with code ${esc(f.rc)}. ` : ''}${esc(f.error||'')}. ${hintFor(f.error||'')}`;
+  }
+  if (kind === 'analysis'){
+    if (E === 'start') return `<b>A submission arrived.</b> Source type is <code>${esc(f.src||'?')}</code>, language <code>${esc(f.lang||'?')}</code>. IDs are shortened to 8 characters by <code>short_id()</code>; that is enough to find the row in the database.`;
+    if (E === 'file') return `<b>One source file was fingerprinted:</b> <code>${esc(f.path||'')}</code>, ${esc(f.lines||'?')} lines, ${esc(f.fps||'?')} fingerprints. This is the AST walk from the other tab, once per file.`;
+    if (E === 'files') return `<b>Totals for the repository:</b> ${esc(f.count||'?')} files, ${esc(f.lines||'?')} lines, ${esc(f.boilerplate||'0')} boilerplate lines removed, ${esc(f.fps||'?')} fingerprints.`;
+    if (E === 'git') return `<b>Commit history check</b> (<code>git_signals</code>): ${esc(f.commits||'?')} commits over ${esc(f.days||'?')} days. <code>big_bang=1</code> would mean one commit added most of the code. <code>signals</code> and <code>flags</code> list anything suspicious; <code>-</code> means none.`;
+    if (E === 'match') return `<b>A similar peer submission</b> <code>${esc(f.peer||'')}</code> shares ${esc(f.pct||'?')}% structure in ${esc(f.frags||'?')} fragments.`;
+    if (E === 'risk') return `<b>How the risk band was decided:</b> overlap ${esc(f.overlap||'?')} gives <code>${esc(f.base||'?')}</code>; soft flags (<code>${esc(f.soft||'-')}</code>) can raise it one step. Final: <code>${esc(f.band||'?')}</code>.`;
+    if (E === 'done') return f.submission ? `<b>Analysis saved</b> as submission <code>${esc(f.submission)}</code> in ${esc(f.ms||'?')} ms total.` : `<b>Analysis finished</b> in ${esc(f.ms||'?')} ms. This was a demo run, so nothing was saved to the database.`;
+    if (E === 'fail') return `<b>The analysis request failed</b>${f.status ? ` with HTTP ${esc(f.status)}` : ''}: ${esc(f.error||'')}. The clone log of the same run name shows the underlying git error.`;
+  }
+  if (kind === 'status'){
+    if (E === 'clone' || E === 'analysis') return `<b>Summary line</b> written by <code>RunLog.__exit__</code> when the ${E} block ended: <code>result=${esc(f.result||'?')}</code>. Search this daily status file for <code>result=fail</code> to find every broken run.`;
+    if (E === 'req') return `<b>HTTP request finished:</b> ${esc(f.method||'')} ${esc(f.path||'')} → ${esc(f.status||'')} in ${esc(f.ms||'?')} ms. 4xx lines are W, 5xx lines are E.`;
+    if (E === 'error') return `<b>Unhandled exception</b> caught by the request middleware. The service returned HTTP 500.`;
+    if (E === 'start' || E === 'stop' || E === 'db') return `<b>Service lifecycle</b> line: the analysis service ${E === 'db' ? 'checked that PostgreSQL answers' : E === 'start' ? 'started' : 'stopped'}.`;
+  }
+  return 'No explanation for this line.';
+}
+function hintFor(err){
+  if (/not found/i.test(err)) return 'Check the URL for typos, and that the repository exists and is public.';
+  if (/could not read Username|Authentication|terminal prompts/i.test(err)) return 'GitHub asked for a login: the repository is private or does not exist (GitHub answers both the same way). The container has no GitHub credentials, so only public repositories can be cloned.';
+  if (/60s|timed out/i.test(err)) return 'The repository is too large or the network is slow; the 60-second limit in analyze_git_url stopped it.';
+  if (/resolve host|network/i.test(err)) return 'The container could not reach GitHub. Check its internet access.';
+  return 'Read git’s message above for the cause.';
+}
+
+/* ---------- terminal rendering */
+let lines = [];
+function termClear(title, note){ lines = []; $('#term').innerHTML = ''; $('#termTitle').textContent = title; $('#termNote').textContent = note || ''; $('#explain').innerHTML = '<span class="hint">Click a log line to see what it means.</span>'; }
+function termAdd(kind, raw){
+  const p = parseLine(raw), idx = lines.length; lines.push({kind, p, raw});
+  const el = document.createElement('div'); el.className = 'tl'; el.dataset.i = idx;
+  const tag = {clone:'clone/', analysis:'analysis/', status:'status/', sys:''}[kind] ?? kind;
+  if (!p) el.innerHTML = `<span class="src ${kind}">${esc(tag)}</span><span class="${kind==='sys'?'sys':''}">${esc(raw)}</span>`;
+  else el.innerHTML = `<span class="src ${kind}">${esc(tag)}</span><span><span class="t">${p.time}</span> <span class="L-${p.level}">${p.level}</span> <span class="ev">${esc(p.event)}</span> ${esc(p.rest).replace(/(\w+)=/g, '<span class="fk">$1=</span>')}</span>`;
+  $('#term').appendChild(el); $('#term').scrollTop = $('#term').scrollHeight;
+}
+$('#term').onclick = e => {
+  const el = e.target.closest('.tl'); if (!el) return;
+  document.querySelectorAll('.tl.pick').forEach(x => x.classList.remove('pick')); el.classList.add('pick');
+  const L = lines[+el.dataset.i];
+  $('#explain').innerHTML = L.p ? explain(L.kind, L.p) : '<span class="hint">Narration, not a log line: this is what happens on disk at this moment.</span>';
+};
+function setVerdict(kind, title, text){
+  $('#verdict').className = 'verdict ' + kind;
+  $('#verdict').innerHTML = `<div class="ic">${{ok:'✓', bad:'✗', run:'…', '':'?'}[kind]}</div><div><b>${title}</b><span>${text}</span></div>`;
+}
+
+/* ---------- "where things are" panel */
+let fsState;
+function fsRender(){
+  const s = fsState; if (!s){ $('#fs').innerHTML = ''; return; }
+  const repoBadge = {none:['not created',''], cloning:['cloning…','run'], cloned:['cloned','ok'], failed:['clone failed','bad'], gone:['deleted','']}[s.repo];
+  const f = (key, name, n) => `<div class="fn ${s.flash===key?'flash':''}"><span class="nm">${esc(name)}</span><span class="bd ${n?'ok':''}">${n ? n + ' line' + (n>1?'s':'') : 'empty'}</span></div>`;
+  $('#fs').innerHTML = `
+    <div class="zone"><div class="zt">Inside the analysis container</div><div class="zs">tempfile.TemporaryDirectory() · removed automatically when analysis ends</div>
+      <div class="fn ${s.repo==='gone'?'gone':''} ${s.flash==='repo'?'flash':''}"><span class="nm">${esc(s.tmp)}/repository/</span><span class="bd ${repoBadge[1]}">${repoBadge[0]}</span></div>
+      ${s.repoInfo ? `<div class="fn"><span class="nm" style="color:var(--muted)">  HEAD ${esc(s.repoInfo.head)} · ${s.repoInfo.files} files · ${s.repoInfo.kb} KB</span></div>` : ''}
+    </div>
+    <div class="zone"><div class="zt">On your PC (docker volume ./logs → /app/logs)</div><div class="zs">${esc(HOST_LOGS)}</div>
+      ${f('clone', `clone\\${s.run}.log`, s.n.clone)}
+      ${f('analysis', `analysis\\${s.run}.log`, s.n.analysis)}
+      ${f('status', `status\\analysis_${s.run.slice(0,10)}.log`, s.n.status)}
+    </div>
+    <div class="callout"><b>Where is the clone?</b> The <code>path=</code> on the clone <code>start</code> line is the folder inside the container. It is new every run and deleted as soon as fingerprinting ends, so the log is the only lasting record of it.</div>`;
+}
+
+/* ---------- scenarios */
+let simToken = 0;
+async function runScenario(){
+  const my = ++simToken, url = $('#url').value.trim() || 'https://github.com/example/repo', sc = $('#scenario').value;
+  const t0 = new Date(), run = runId(t0); let clock = t0.getTime();
+  const tmp = '/tmp/tmp' + Array.from(crypto.getRandomValues(new Uint8Array(8)), b => 'abcdefghijklmnopqrstuvwxyz0123456789_'[b % 37]).join('');
+  $('#fsNote').textContent = 'simulated';
+  fsState = {run, tmp, repo:'none', repoInfo:null, n:{clone:0, analysis:0, status:0}, flash:null};
+  termClear(`run ${run}`, 'replay · time sped up'); fsRender();
+  setVerdict('run', 'Running…', `Simulating POST /api/analyze with source_url=${esc(url)}`);
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const at = ms => { clock += ms; return new Date(clock); };
+  const W = async (kind, adv, level, event, fields = {}, pause = 420) => {
+    if (my !== simToken) throw 'cancel';
+    termAdd(kind, `${stamp(at(adv))} ${level} ${event}${Object.keys(fields).length ? ' ' + fieldsText(fields) : ''}`);
+    fsState.n[kind]++; fsState.flash = kind; fsRender(); await sleep(pause);
+  };
+  const say = async (text, pause = 380) => { if (my !== simToken) throw 'cancel'; termAdd('sys', '# ' + text); await sleep(pause); };
+  const user = hex(4), subj = hex(4);
+  try {
+    await W('analysis', 3, 'I', 'start', {user, role:'student', src:'git', source:url, lang:'python', self_check:true, subject:subj});
+    await W('clone', 1, 'I', 'start', {url});
+    fsState.repo = 'cloning'; fsState.flash = 'repo'; fsRender();
+    await say(`git clone -- ${url.replace(/:\/\/[^\/\s@]+@/, '://***@')} ${tmp}/repository`, 700);
+    const cloneStart = clock;
+    if (sc === 'ok'){
+      const ms = 1500 + Math.floor(Math.random()*900), head = hex(4).slice(0,7), files = 23, kb = 186;
+      await W('clone', ms, 'I', 'done', {ms, head, files, kb});
+      fsState.repo = 'cloned'; fsState.repoInfo = {head, files, kb}; fsState.flash = 'repo'; fsRender();
+      await W('status', 1, 'I', 'clone', {run, result:'ok', ms: ms+1});
+      await say(`fingerprinting ${tmp}/repository …`);
+      await W('analysis', 40, 'I', 'file', {path:'calculator.py', lines:362, fps:812});
+      await W('analysis', 31, 'I', 'file', {path:'tests/test_calculator.py', lines:88, fps:164});
+      await W('analysis', 2, 'I', 'files', {count:2, lines:450, boilerplate:1, fps:976});
+      await W('analysis', 25, 'I', 'git', {commits:14, days:'6.52', big_bang:false, low_entropy:3, author_match:'100.0', signals:'-', flags:'-'});
+      fsState.repo = 'gone'; fsState.flash = 'repo'; fsRender();
+      await say('TemporaryDirectory closed: the cloned folder is deleted now');
+      await W('analysis', 60, 'I', 'risk', {overlap:'0.0812', base:'low', soft:'-', band:'low', peers:0});
+      const total = clock - t0.getTime() + 3, sid = hex(4);
+      await W('analysis', 3, 'I', 'done', {submission:sid, ms:total});
+      await W('status', 1, 'I', 'analysis', {run, result:'ok', ms:total+1});
+      await W('status', 2, 'I', 'req', {method:'POST', path:'/api/analyze', status:200, ms:total+4});
+      setVerdict('ok', 'Clone worked', `HEAD ${head} · ${files} files · ${kb} KB, cloned into ${esc(tmp)}/repository/ and deleted after fingerprinting. Proof is the <code>done</code> line in clone\\${run}.log.`);
+    } else {
+      let fail;
+      if (sc === 'notfound') fail = {rc:128, error:`remote: Repository not found. | fatal: repository '${url}/' not found`, ms:640};
+      if (sc === 'private') fail = {rc:128, error:"fatal: could not read Username for 'https://github.com': No such device or address", ms:410};
+      if (sc === 'timeout'){ await say('…still cloning (limit is 60s)…', 900); fail = {error:'clone took longer than 60s', ms:60012}; }
+      await W('clone', fail.ms, 'E', 'fail', fail);
+      fsState.repo = 'failed'; fsState.flash = 'repo'; fsRender();
+      await W('status', 1, 'E', 'clone', {run, result:'fail', ms:fail.ms+1});
+      fsState.repo = 'gone'; fsRender();
+      const total = clock - t0.getTime() + 2;
+      if (sc === 'timeout'){
+        await W('analysis', 2, 'E', 'fail', {error:"TimeoutExpired: Command '['git', 'clone', '--', '" + url + "', '" + tmp + "/repository']' timed out after 60 seconds", ms:total});
+        await W('status', 1, 'E', 'analysis', {run, result:'fail', ms:total+1});
+        await W('status', 1, 'E', 'error', {method:'POST', path:'/api/analyze', status:500, error:"TimeoutExpired: Command '['git', 'clone', ...]' timed out after 60 seconds"});
+        setVerdict('bad', 'Clone failed: timed out', `git ran past the 60 s limit. Note the request ends as HTTP <b>500</b>, not 400: <code>subprocess.TimeoutExpired</code> is not in main.py's <code>except (OSError, RuntimeError, ValueError)</code>.`);
+      } else {
+        await W('analysis', 2, 'E', 'fail', {status:400, error:'Repository could not be cloned', ms:total});
+        await W('status', 1, 'E', 'analysis', {run, result:'fail', ms:total+1});
+        await W('status', 1, 'W', 'req', {method:'POST', path:'/api/analyze', status:400, ms:total+3});
+        setVerdict('bad', sc === 'private' ? 'Clone failed: private repository' : 'Clone failed: repository not found', `${hintFor(fail.error)} The student only sees “Repository could not be cloned”; the real git error is only in clone\\${run}.log.`);
+      }
+    }
+    fsState.flash = null; fsRender();
+  } catch (e) { if (e !== 'cancel') throw e; }
+}
+
+/* ---------- real logs */
+let real = null;
+$('#openDir').onclick = () => $('#dirInput').click();
+$('#openFile').onclick = () => $('#fileInput').click();
+$('#dirInput').onchange = e => loadReal([...e.target.files]);
+$('#fileInput').onchange = e => loadReal([...e.target.files]);
+function kindOf(path, text){
+  const p = path.replace(/\\/g, '/');
+  if (/(^|\/)clone\//.test(p)) return 'clone';
+  if (/(^|\/)status\//.test(p) || /^analysis_\d{4}-\d\d-\d\d\.log$/.test(p.split('/').pop())) return 'status';
+  if (/(^|\/)analysis\//.test(p)) return 'analysis';
+  if (/ I start url=/.test(text) && !/ src=/.test(text)) return 'clone';
+  if (/ run=\S+ result=/.test(text)) return 'status';
+  return 'analysis';
+}
+async function loadReal(files){
+  files = files.filter(f => /\.log$/i.test(f.name)); if (!files.length) { setVerdict('', 'No .log files found', 'Pick the OriginTrace\\logs folder (or one of clone, analysis, status inside it).'); return; }
+  simToken++;
+  const runs = {}, status = [];
+  for (const f of files){
+    const text = await f.text(), rel = f.webkitRelativePath || f.name, kind = kindOf(rel, text);
+    const stem = f.name.replace(/\.log$/i, '');
+    if (kind === 'status') status.push({name:f.name, text});
+    else { (runs[stem] ||= {}); runs[stem][kind] = text; }
+  }
+  real = {runs, status};
+  const ids = Object.keys(runs).sort().reverse();
+  const verdictOf = r => { const c = r.clone || ''; if (/ done /.test(c)) return ['✓ cloned','ok']; if (/ fail /.test(c)) return ['✗ failed','bad']; if (c) return ['… no end','warn']; return [/src=upload/.test(r.analysis||'') ? 'upload' : 'no clone log','']; };
+  const statusFails = status.reduce((n, s) => n + (s.text.match(/ result=fail/g) || []).length, 0);
+  fsState = null;
+  $('#fsNote').textContent = 'your real logs';
+  $('#fs').innerHTML = `<div class="zone"><div class="zt">Runs found (${ids.length})</div><div class="zs">clone + analysis logs share one run name</div>
+      <div class="runs">${ids.map(id => { const [t, c] = verdictOf(runs[id]); return `<button class="runbtn" data-id="${esc(id)}"><span>${esc(id)}</span><span class="bd ${c}">${t}</span></button>`; }).join('') || '<span class="empty">none</span>'}</div></div>
+    <div class="zone"><div class="zt">Status files (${status.length})</div><div class="zs">${statusFails} failed run${statusFails===1?'':'s'} recorded</div>
+      <div class="runs">${status.map((s, i) => `<button class="runbtn" data-status="${i}"><span>${esc(s.name)}</span><span class="bd">${s.text.split('\n').filter(Boolean).length} lines</span></button>`).join('') || '<span class="empty">none</span>'}</div></div>`;
+  $('#fs').onclick = e => {
+    const b = e.target.closest('.runbtn'); if (!b) return;
+    document.querySelectorAll('.runbtn.on').forEach(x => x.classList.remove('on')); b.classList.add('on');
+    if (b.dataset.status != null) showStatus(+b.dataset.status); else showRun(b.dataset.id);
+  };
+  if (ids.length) { showRun(ids[0]); $('#fs .runbtn').classList.add('on'); }
+  else if (status.length) showStatus(0);
+}
+function showRun(id){
+  const r = real.runs[id]; termClear(`run ${id}`, 'from your logs folder');
+  const merged = [];
+  for (const kind of ['analysis', 'clone']) (r[kind] || '').split(/\r?\n/).filter(Boolean).forEach((raw, i) => merged.push({kind, raw, t: (parseLine(raw)||{}).time || '', i}));
+  for (const s of real.status) s.text.split(/\r?\n/).filter(l => l.includes(`run=${id}`)).forEach((raw, i) => merged.push({kind:'status', raw, t:(parseLine(raw)||{}).time || '', i}));
+  merged.sort((a, b) => a.t < b.t ? -1 : a.t > b.t ? 1 : 0);
+  merged.forEach(m => termAdd(m.kind, m.raw));
+  const cl = (r.clone || '').split(/\r?\n/).map(parseLine).filter(Boolean);
+  const done = cl.find(p => p.event === 'done'), fail = cl.find(p => p.event === 'fail'), start = cl.find(p => p.event === 'start');
+  if (done) setVerdict('ok', 'Clone worked', `${esc(start?.fields.url || '')} → HEAD ${esc(done.fields.head||'?')} · ${esc(done.fields.files||'?')} files · ${esc(done.fields.kb||'?')} KB in ${esc(done.fields.ms||'?')} ms. The folder was temporary and is already deleted.`);
+  else if (fail) setVerdict('bad', 'Clone failed', `${esc(fail.fields.error || '')}. ${hintFor(fail.fields.error || '')}`);
+  else if (start) setVerdict('bad', 'Clone never finished', 'There is a start line but no done/fail. The service probably crashed or was stopped mid-clone; check the status file for that time.');
+  else if (/src=upload/.test(r.analysis || '')) setVerdict('', 'Upload, not a clone', 'This run analysed an uploaded file, so no git clone happened.');
+  else setVerdict('', 'No clone log for this run', 'Only an analysis log exists under this name.');
+}
+function showStatus(i){
+  const s = real.status[i]; termClear(s.name, 'service status file');
+  s.text.split(/\r?\n/).filter(Boolean).forEach(raw => termAdd('status', raw));
+  const fails = (s.text.match(/ result=fail/g) || []).length, oks = (s.text.match(/ result=ok/g) || []).length;
+  setVerdict(fails ? 'bad' : 'ok', `${oks} ok · ${fails} failed`, 'Each clone/analysis line is one run. Pick a run on the right to see its full clone and analysis logs.');
+}
+
+/* ================================================================ LIVE MODE (analysis service, DEMO_MODE=1) */
+let LIVE = false;
+function renderSampleOptions(){
+  const own = SAMPLES.filter(s => s.id.startsWith('own-')), base = SAMPLES.filter(s => !s.id.startsWith('own-'));
+  const cur = $('#sampleSel').value;
+  $('#sampleSel').innerHTML = `<optgroup label="Built-in samples">${base.map(s => `<option value="${s.id}">${esc(s.label)}</option>`).join('')}</optgroup>`
+    + `<optgroup label="Live">${own.map(s => `<option value="${s.id}">${esc(s.label)}</option>`).join('')}<option value="__own">✎ Your own code…</option></optgroup>`;
+  if (cur && [...$('#sampleSel').options].some(o => o.value === cur)) $('#sampleSel').value = cur;
+}
+$('#ownA').value = 'def total_price(items, tax):\n    subtotal = 0\n    for item in items:\n        subtotal += item.price * item.qty\n    return subtotal * (1 + tax)\n';
+$('#ownB').value = 'def compute_sum(rows, rate):\n    acc = 0\n    for r in rows:\n        acc += r.price * r.qty\n    return acc * (1 + rate)\n';
+
+async function api(path, body){
+  const res = await fetch(path, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(typeof data.detail === 'string' ? data.detail : (data.detail ? JSON.stringify(data.detail) : `HTTP ${res.status}`));
+  return data;
+}
+async function detectLive(){
+  if (!/^https?:$/.test(location.protocol)) return setLive(false, 'Opened as a file. Serve it from the analysis service for live mode.');
+  try { await api('/api/demo/ast', {source:'x = 1\n', language:'python'}); setLive(true); }
+  catch (e) { setLive(false, 'Analysis service did not answer /api/demo (is DEMO_MODE=1?)'); }
+}
+function setLive(on, why){
+  LIVE = on;
+  $('#live').className = 'pill' + (on ? ' on' : '');
+  $('#live').textContent = on ? 'Live · analysis service' : 'Offline · built-in samples';
+  $('#live').title = why || 'Connected to the analysis service on this origin';
+  const opt = $('#scenario').querySelector('option[value="live"]'); opt.disabled = !on;
+  if (on) { $('#scenario').value = 'live'; loadSaved(); }
+  $('#ownRun').disabled = !on;
+  $('#ownMsg').className = 'msg'; $('#ownMsg').textContent = on ? '' : 'Needs the analysis service: run docker compose up, then open http://localhost:8100/visualizer/';
+}
+
+$('#ownRun').onclick = async () => {
+  const lang = $('#ownLang').value, a = $('#ownA').value, b = $('#ownB').value;
+  if (!a.trim()) { $('#ownMsg').className = 'msg err'; $('#ownMsg').textContent = 'Paste some code first.'; return; }
+  $('#ownRun').disabled = true; $('#ownMsg').className = 'msg'; $('#ownMsg').textContent = 'Parsing with tree-sitter…';
+  try {
+    const [ra, rb] = await Promise.all([api('/api/demo/ast', {source:a, language:lang}), b.trim() ? api('/api/demo/ast', {source:b, language:lang}) : null]);
+    const make = (id, r, label, pair) => ({id, label, lang:r.language, source:r.source, filtered:r.filtered, ast:r.ast, pair, expect:{types:r.types.length, fps:r.fingerprints}});
+    for (let i = SAMPLES.length - 1; i >= 0; i--) if (SAMPLES[i].id.startsWith('own-')) SAMPLES.splice(i, 1);
+    delete cache['own-a']; delete cache['own-b'];
+    SAMPLES.push(make('own-a', ra, `Your code · ${lang}`, rb ? 'own-b' : null));
+    if (rb) SAMPLES.push(make('own-b', rb, `Your comparison · ${lang}`, 'own-a'));
+    renderSampleOptions(); $('#sampleSel').value = 'own-a'; loadSample('own-a');
+    $('#ownMsg').textContent = `${ra.types.length} named nodes, ${ra.fingerprints.length} fingerprints${rb ? ` · comparison: ${rb.fingerprints.length}` : ''}. Press Play.`;
+  } catch (e) { $('#ownMsg').className = 'msg err'; $('#ownMsg').textContent = e.message; }
+  finally { $('#ownRun').disabled = !LIVE; }
+};
+
+async function runLive(){
+  const my = ++simToken, url = $('#url').value.trim(), lang = $('#cloneLang').value;
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  termClear('live clone', 'real run · analysis service'); $('#fsNote').textContent = 'live';
+  fsState = null; $('#fs').innerHTML = '<div class="zone"><div class="zt">Waiting for git…</div><div class="zs">the request returns when the clone and fingerprinting are finished</div></div>';
+  setVerdict('run', 'Cloning for real…', `POST /api/demo/clone · ${esc(url)} · ${lang}`);
+  termAdd('sys', `# POST /api/demo/clone url=${url} language=${lang}`);
+  let r;
+  try { r = await api('/api/demo/clone', {url, language:lang, save: $('#saveRun').checked}); }
+  catch (e) { if (my === simToken) { termAdd('sys', '# request failed: ' + e.message); setVerdict('bad', 'Request failed', esc(e.message)); } return; }
+  if (my !== simToken) return;
+  termClear(`run ${r.run_id}`, 'real run · analysis service');
+  const merged = [];
+  for (const kind of ['analysis', 'clone', 'status']) r.logs[kind].forEach((raw, i) => merged.push({kind, raw, t:(parseLine(raw) || {}).time || '', o: kind === 'analysis' ? 0 : kind === 'clone' ? 1 : 2, i}));
+  merged.sort((a, b) => a.t < b.t ? -1 : a.t > b.t ? 1 : a.o - b.o || a.i - b.i);
+  const startLine = r.logs.clone.map(parseLine).find(p => p && p.event === 'start');
+  const tmp = startLine && startLine.fields.path ? startLine.fields.path.replace(/\/repository$/, '') : '(temp folder)';
+  fsState = {run: r.run_id, tmp, repo:'none', repoInfo:null, n:{clone:0, analysis:0, status:0}, flash:null};
+  fsRender();
+  for (const m of merged){
+    if (my !== simToken) return;
+    termAdd(m.kind, m.raw);
+    fsState.n[m.kind]++; fsState.flash = m.kind;
+    const p = parseLine(m.raw);
+    if (p && m.kind === 'clone'){
+      if (p.event === 'start') { fsState.repo = 'cloning'; fsState.flash = 'repo'; }
+      if (p.event === 'done') { fsState.repo = 'cloned'; fsState.repoInfo = {head:p.fields.head, files:p.fields.files, kb:p.fields.kb}; fsState.flash = 'repo'; }
+      if (p.event === 'fail') { fsState.repo = 'failed'; fsState.flash = 'repo'; }
+    }
+    if (p && m.kind === 'analysis' && (p.event === 'done' || p.event === 'fail')) fsState.repo = 'gone';
+    fsRender(); await sleep(merged.length > 40 ? 60 : 180);
+  }
+  fsState.repo = 'gone'; fsState.flash = null; fsRender();
+  loadSaved();
+  const done = r.logs.clone.map(parseLine).find(p => p && p.event === 'done');
+  const fail = r.logs.clone.map(parseLine).find(p => p && p.event === 'fail');
+  if (r.ok && done){
+    const s = r.summary, cm = s.commit_metrics;
+    setVerdict('ok', 'Clone worked', `HEAD ${esc(done.fields.head)} · ${esc(done.fields.files)} files · ${esc(done.fields.kb)} KB, cloned into ${esc(tmp)}/repository/ in ${esc(done.fields.ms)} ms, then deleted. ${s.files_included} ${lang} files gave ${s.fingerprints} fingerprints; ${cm.commit_count} commits over ${cm.timespan_days} days${s.provenance_flags.length ? ' · flags: ' + esc(s.provenance_flags.join(', ')) : ''}. Logs are in ${esc(HOST_LOGS)}.`);
+  } else {
+    const err = (fail && fail.fields.error) || r.error || 'unknown error';
+    setVerdict('bad', 'Clone failed', `${esc(err)}. ${hintFor(err)}`);
+  }
+}
+$('#runBtn').onclick = () => ($('#scenario').value === 'live' ? runLive() : runScenario());
+
+/* ---------- saved results (console tab) */
+let savedItems = [];
+const repoName = u => (u || '').replace(/^https:\/\/(www\.)?github\.com\//, '').replace(/\.git$/, '');
+async function loadSaved(){
+  if (!LIVE) return;
+  try { savedItems = await (await fetch('/api/demo/saved')).json(); } catch { savedItems = []; }
+  renderSaved(); fillCompareSelects();
+}
+function renderSaved(){
+  $('#savedList').innerHTML = savedItems.length ? savedItems.map(s => `
+    <div class="sv" data-id="${esc(s.run_id)}">
+      <div style="min-width:0;flex:1">
+        <div class="u">${esc(repoName(s.url))}</div>
+        <div class="m"><span class="tag">${esc(s.language)}</span>${esc(s.head || '-')} · ${s.files_included} files · ${s.fingerprint_count} fps${s.has_code ? '' : ' · <span class="tag warn">no code view</span>'}</div>
+        <div class="m">${esc(s.run_id)}</div>
+      </div>
+      <button class="btn go" style="padding:4px 10px;font-size:12px">Compare →</button>
+      <button class="x" title="Delete saved result" aria-label="Delete">×</button>
+    </div>`).join('') : '<span class="empty">Nothing saved yet. Run a live clone with “Save run” ticked.</span>';
+}
+let pendingDelete = null;
+$('#savedList').onclick = async e => {
+  const row = e.target.closest('.sv'); if (!row) return;
+  const id = row.dataset.id;
+  if (e.target.closest('.x')) {
+    if (pendingDelete !== id) {
+      pendingDelete = id; const b = e.target.closest('.x'); b.textContent = 'delete?'; b.style.fontSize = '11.5px'; b.style.color = 'var(--err)';
+      setTimeout(() => { if (pendingDelete === id) { pendingDelete = null; renderSaved(); } }, 3000); return;
+    }
+    pendingDelete = null;
+    await fetch('/api/demo/saved/' + encodeURIComponent(id), {method:'DELETE'}).catch(() => {});
+    loadSaved(); return;
+  }
+  if (e.target.closest('.go')) { openTab('compare'); $('#cmpA').value = id; syncB(); }
+};
+
+/* ================================================================ COMPARISON TAB */
+const CPH = [
+  {n:'Fingerprints', d:'what each run has'},
+  {n:'Shared hashes', d:'overlap = shared ÷ unique'},
+  {n:'Matched code', d:'where it catches on'},
+  {n:'Risk band', d:'35% medium · 60% high'},
+  {n:'Soft flags', d:'commit + provenance'},
+];
+const PY_KW = new Set('False None True and as assert async await break class continue def del elif else except finally for from global if import in is lambda nonlocal not or pass raise return try while with yield self int float str list dict set tuple bool print len range public private protected static void new this return null true false function echo array foreach'.split(' '));
+let C = null, cSteps = [], cCur = 0, cTimer = null;
+
+function fillCompareSelects(){
+  const opts = savedItems.map(s => `<option value="${esc(s.run_id)}">${esc(repoName(s.url))} · ${esc(s.head || '')} · ${esc(s.run_id.slice(5, 16).replace('_', ' '))}</option>`).join('');
+  const a = $('#cmpA').value, b = $('#cmpB').value;
+  $('#cmpA').innerHTML = `<optgroup label="Built-in example"><option value="__ex">math-shell (renamed copy of calculator)</option></optgroup>` + (opts ? `<optgroup label="Saved runs">${opts}</optgroup>` : '');
+  $('#cmpB').innerHTML = `<optgroup label="Built-in example"><option value="__ex">calculator (original)</option></optgroup>` + (opts ? `<optgroup label="Saved runs">${opts}</optgroup>` : '');
+  if ([...$('#cmpA').options].some(o => o.value === a)) $('#cmpA').value = a;
+  if ([...$('#cmpB').options].some(o => o.value === b)) $('#cmpB').value = b;
+  syncB();
+}
+function syncB(){
+  const ex = $('#cmpA').value === '__ex';
+  if (ex) $('#cmpB').value = '__ex';
+  [...$('#cmpB').options].forEach(o => o.disabled = ex ? o.value !== '__ex' : o.value === '__ex' || o.value === $('#cmpA').value);
+  if (!ex && ($('#cmpB').value === '__ex' || $('#cmpB').value === $('#cmpA').value)) { const o = [...$('#cmpB').options].find(o => !o.disabled); if (o) $('#cmpB').value = o.value; }
+  $('#cmpMsg').textContent = !ex && !LIVE ? 'Saved runs need live mode.' : '';
+}
+$('#cmpA').onchange = syncB;
+
+async function runCompare(){
+  cStop();
+  const a = $('#cmpA').value, b = $('#cmpB').value;
+  $('#cmpMsg').className = 'msg'; $('#cmpMsg').textContent = '';
+  try {
+    if (a === '__ex') C = OFFLINE_COMPARE;
+    else {
+      if (!b || b === '__ex' || a === b) throw new Error('Pick two different saved runs.');
+      $('#cmpMsg').textContent = 'Comparing…';
+      C = await api('/api/demo/compare', {check:a, against:b});
+      $('#cmpMsg').textContent = '';
+    }
+  } catch (e) { $('#cmpMsg').className = 'msg err'; $('#cmpMsg').textContent = e.message; return; }
+  buildCSteps(); cCur = 0; cRender();
+}
+$('#cmpGo').onclick = runCompare;
+
+function flagItems(){
+  const m = C.commit_metrics || {};
+  const raise = (type, sev) => type === 'big_bang_commit' || sev === 'high';
+  const why = {
+    big_bang_commit: () => `Little or no history: <b>${m.commit_count ?? '?'}</b> commit(s)${m.has_big_bang ? ', and one commit changed more than 80% of the final line count' : ''}. Code that arrives all at once is what copying usually looks like.`,
+    low_message_entropy: () => `<b>${m.low_entropy_count ?? '?'} of ${m.commit_count ?? '?'}</b> commit messages are two words or less, or repeated. Fires when that is more than half.`,
+    author_committer_mismatch: () => `Only <b>${m.author_committer_match_pct ?? '?'}%</b> of commits have the same author and committer, so someone else committed some of the work.`,
+    enrolled_email_mismatch: () => `At least one commit email differs from the student's enrolled account.`,
+    timestamp_anomaly: () => `Commit dates run backwards, or every commit has the same timestamp. Real history moves forward in time.`,
+    orphan_commit: () => `The whole repository is one root commit with no parent: the code has no development history at all.`,
+    history_rewritten: () => `Git still holds commits that the current history no longer reaches, so history was rewritten (rebase, amend or force-push).`,
+  };
+  return [
+    ...C.commit_signals.map(s => ({kind:'commit signal', type:s.signal_type, sev:s.severity, desc:s.description})),
+    ...C.provenance_flags.map(f => ({kind:'provenance flag', type:f.flag_type, sev:f.severity, desc:f.description})),
+  ].map(x => ({...x, raises: raise(x.type, x.sev), why: (why[x.type] || (() => esc(x.desc || '')))()}));
+}
+function buildCSteps(){
+  cSteps = [{ph:0}, {ph:1}];
+  C.regions.forEach((_, i) => cSteps.push({ph:2, i}));
+  if (!C.regions.length) cSteps.push({ph:2, i:-1});
+  cSteps.push({ph:3});
+  const fl = flagItems(); C._flags = fl;
+  if (fl.length) fl.forEach((_, i) => cSteps.push({ph:4, i})); else cSteps.push({ph:4, i:-1});
+  cSteps.push({ph:5});
+  $('#cRail').innerHTML = CPH.map((p, i) => `<button class="phase" data-ph="${i}"><b><span class="num">${i+1}</span>${p.n}</b><span>${p.d}</span></button>`).join('')
+    + `<button class="phase" data-ph="5"><b><span class="num">6</span>Verdict</b><span>why this band</span></button>`;
+  $('#cTitleA').textContent = repoName(C.check.url); $('#cTitleB').textContent = repoName(C.against.url);
+}
+function codeLines(el, scroll, sources, file, range){
+  const text = sources[file];
+  if (text == null){ el.innerHTML = `<p class="empty" style="padding:12px 14px">${file ? `Source for <code>${esc(file)}</code> was not saved (saved before the code view existed, or the repository is very large). Re-run the clone to see code.` : 'Pick a step to see code.'}</p>`; return; }
+  const [a, b] = range || [0, -1];
+  el.innerHTML = `<div class="fname">${esc(file)}</div>` + text.split('\n').map((l, i) => `<div class="l${i+1 >= a && i+1 <= b ? ' hl' : ''}"><span class="n">${i+1}</span><span class="t">${esc(l) || ' '}</span></div>`).join('');
+  const first = el.querySelector('.l.hl');
+  if (first) scroll.scrollTop = first.offsetTop - el.offsetTop - 60; else scroll.scrollTop = 0;
+}
+const pctTxt = v => (v * 100).toFixed(2) + '%';
+const bandTag = b => `<span class="band ${b}">${b}</span>`;
+function words(s){ return new Set((s.match(/\b[A-Za-z_][A-Za-z0-9_]*\b/g) || []).filter(w => !PY_KW.has(w))); }
+function snippet(sources, file, r){ const t = sources[file]; return t && r ? t.split('\n').slice(r[0]-1, r[1]).join('\n') : ''; }
+
+function cRender(){
+  if (!C) return;
+  const st = cSteps[cCur], th = C.thresholds;
+  document.querySelectorAll('#cRail .phase').forEach(el => { const p = +el.dataset.ph; el.classList.toggle('active', p === st.ph); el.classList.toggle('done', p < st.ph); });
+  $('#cCounter').textContent = `step ${cCur+1} / ${cSteps.length}`;
+  $('#cBack').disabled = cCur === 0; $('#cStep').disabled = cCur === cSteps.length - 1;
+  const A = repoName(C.check.url), B = repoName(C.against.url);
+  let note = '', detail = '';
+  const firstRegion = C.regions[0];
+  if (st.ph === 2 && st.i >= 0){
+    const r = C.regions[st.i];
+    codeLines($('#cCodeA'), $('#cScrollA'), C.sources_a, r.file_a, r.lines_a);
+    codeLines($('#cCodeB'), $('#cScrollB'), C.sources_b, r.file_b, r.lines_b);
+    const wa = words(snippet(C.sources_a, r.file_a, r.lines_a)), wb = words(snippet(C.sources_b, r.file_b, r.lines_b));
+    const onlyA = [...wa].filter(w => !wb.has(w)).slice(0, 8), onlyB = [...wb].filter(w => !wa.has(w)).slice(0, 8);
+    const ln = (r2) => r2 ? `lines ${r2[0]}–${r2[1]}` : 'lines ?';
+    note = `<b>Match ${st.i+1} of ${C.regions.length}:</b> ${ln(r.lines_a)} of <code>${esc(r.file_a)}</code> and ${ln(r.lines_b)} of <code>${esc(r.file_b)}</code> produce <b>${r.hashes}</b> identical fingerprints. `
+      + (onlyA.length || onlyB.length
+        ? `The text differs (only in ${esc(A)}: <code>${onlyA.map(esc).join('</code> <code>') || '–'}</code>; only in ${esc(B)}: <code>${onlyB.map(esc).join('</code> <code>') || '–'}</code>), but the AST keeps node types, not names, so the structure still matches.`
+        : `The two stretches use the same words too, so this is a direct copy or very common code.`);
+    detail = `<div class="box"><div class="k">one of the shared 5-grams (node types in a row)</div><div class="v">${r.gram.map(esc).join(' | ') || '–'}</div></div>`;
+  } else {
+    if (firstRegion) { codeLines($('#cCodeA'), $('#cScrollA'), C.sources_a, firstRegion.file_a, null); codeLines($('#cCodeB'), $('#cScrollB'), C.sources_b, firstRegion.file_b, null); }
+    else { codeLines($('#cCodeA'), $('#cScrollA'), {}, null); codeLines($('#cCodeB'), $('#cScrollB'), {}, null); }
+    if (st.ph === 0){
+      note = `Each saved run is a set of fingerprint hashes. <b>${esc(A)}</b> is the run being checked (like a new submission); <b>${esc(B)}</b> plays the earlier peer submission it is compared against. Duplicate hashes count once.`;
+      const mx = Math.max(C.unique_check, C.unique_against, 1);
+      detail = `<div class="box"><div class="k">unique hashes</div>
+        <div class="hbar"><span>${esc(A)}</span><div><i style="width:${100*C.unique_check/mx}%"></i></div><b>${C.unique_check}</b></div>
+        <div class="hbar"><span>${esc(B)}</span><div><i style="width:${100*C.unique_against/mx}%;background:var(--accent-2)"></i></div><b>${C.unique_against}</b></div></div>`;
+    } else if (st.ph === 1){
+      note = `<b>${C.shared}</b> hashes appear in both runs. Overlap is measured from the checked run's side, exactly like <code>db.save_analysis</code>: ${C.shared} ÷ ${C.unique_check} = <b>${pctTxt(C.overlap)}</b>. Seen from ${esc(B)}'s side it would be ${pctTxt(C.reverse_overlap)}, so the direction matters.`;
+      detail = `<div class="box"><div class="k">${esc(A)}: shared vs not shared</div><div class="ovbar" style="height:14px"><div style="width:${100*C.overlap}%;background:var(--kgram)"></div></div>
+        <div class="v">${C.shared} shared · ${C.unique_check - C.shared} only in ${esc(A)}</div></div>`;
+    } else if (st.ph === 2){
+      note = `No shared fingerprints, so there is no matching code to show.`;
+    } else if (st.ph === 3){
+      const pc = C.overlap * 100;
+      note = `The overlap alone sets the starting band: below ${th.medium*100}% is <b>low</b>, ${th.medium*100}% and up is <b>medium</b>, ${th.high*100}% and up is <b>high</b>. ${pctTxt(C.overlap)} gives ${bandTag(C.base_band)}.`;
+      detail = `<div class="box"><div class="k">overlap on the band scale</div><div class="ovbar" style="height:14px"><div style="width:${Math.min(100, pc)}%;background:${pc >= th.high*100 ? 'var(--err)' : pc >= th.medium*100 ? 'var(--warn)' : 'var(--ok)'}"></div><i style="left:${th.medium*100}%"></i><i style="left:${th.high*100}%"></i></div>
+        <div class="legend"><span>0%</span><span style="margin-left:auto">35% medium</span><span>60% high</span><span>100%</span></div></div>`;
+    } else if (st.ph === 4){
+      if (st.i < 0) note = `${esc(A)} has no commit signals or provenance flags, so nothing can raise the band.`;
+      else {
+        const f = C._flags[st.i];
+        note = `<b>${esc(f.type)}</b> (${f.kind}, ${f.sev}): ${f.why} ${f.raises ? '<b>This one raises the band one step.</b>' : 'It is shown to the instructor but <b>does not change the band</b>; only big_bang_commit and high-severity flags do.'}`;
+      }
+      detail = `<div class="box"><div class="k">commit history of ${esc(A)}</div><div class="v">${C.commit_metrics ? Object.entries(C.commit_metrics).map(([k, v]) => `${esc(k)}=${esc(String(v))}`).join('<br>') : 'not saved'}</div></div>`;
+    } else {
+      const raisers = C._flags.filter(f => f.raises).map(f => f.type);
+      note = `<b>${esc(A)}</b> is ${bandTag(C.risk_band)} against ${esc(B)}. ` + (
+        C.risk_band !== C.base_band
+          ? `The overlap of ${pctTxt(C.overlap)} gave ${bandTag(C.base_band)}, and ${raisers.map(esc).join(' + ')} raised it one step. Soft flags can raise a band once but can never reach high alone.`
+          : raisers.length && C.base_band === 'high'
+            ? `The overlap of ${pctTxt(C.overlap)} is already high, so ${raisers.map(esc).join(' + ')} cannot raise it further, but they back up the finding.`
+            : `It comes from the overlap of ${pctTxt(C.overlap)}${raisers.length ? '' : '; no flag was strong enough to raise it'}.`)
+        + ` The instructor still decides: the band says where to look, the matched code shows what to look at.`;
+    }
+  }
+  $('#cNote').innerHTML = note;
+  $('#cOut').innerHTML = `
+    <div class="flow">Overlap <b>${pctTxt(C.overlap)}</b> → ${bandTag(C.base_band)} ${C.risk_band !== C.base_band ? `→ flags → ${bandTag(C.risk_band)}` : ''}</div>
+    ${detail}
+    <div><div class="lbl">matched code <em>${C.regions.length} biggest of ${C.region_total}</em></div>
+      <div class="regions">${C.regions.map((r, i) => `<button class="rg ${st.ph === 2 && st.i === i ? 'on' : ''}" data-i="${i}"><span>${esc(r.file_a)}:${r.lines_a ? r.lines_a.join('–') : '?'} ↔ ${esc(r.file_b)}:${r.lines_b ? r.lines_b.join('–') : '?'}</span><b>${r.hashes}</b></button>`).join('') || '<span class="empty">none</span>'}</div></div>
+    <div><div class="lbl">soft flags <em>${C._flags.length}</em></div>${C._flags.map((f, i) => `<button class="rg ${st.ph === 4 && st.i === i ? 'on' : ''}" data-f="${i}"><span>${esc(f.type)}</span><span class="tag ${f.raises ? 'warn' : ''}">${f.raises ? 'raises band' : f.sev}</span></button>`).join('') || '<span class="empty">none</span>'}</div>`;
+  const on = $('#cOut .rg.on'); if (on) on.scrollIntoView({block:'nearest'});
+}
+$('#cOut').onclick = e => {
+  const b = e.target.closest('.rg'); if (!b) return; cStop();
+  if (b.dataset.i != null) cGo(cSteps.findIndex(s => s.ph === 2 && s.i === +b.dataset.i));
+  else cGo(cSteps.findIndex(s => s.ph === 4 && s.i === +b.dataset.f));
+};
+function cGo(i){ cCur = Math.max(0, Math.min(cSteps.length - 1, i)); cRender(); }
+function cStop(){ clearTimeout(cTimer); cTimer = null; $('#cPlay').textContent = '▶ Play'; }
+function cPlay(){
+  if (!C) return; if (cTimer){ cStop(); return; }
+  if (cCur === cSteps.length - 1) cCur = 0;
+  $('#cPlay').textContent = '❚❚ Pause';
+  const tick = () => { if (cCur >= cSteps.length - 1){ cStop(); return; } cGo(cCur + 1); cTimer = setTimeout(tick, 400 + 30 * (100 - +$('#cSpeed').value)); };
+  cTimer = setTimeout(tick, 0);
+}
+$('#cPlay').onclick = cPlay;
+$('#cStep').onclick = () => { cStop(); cGo(cCur + 1); };
+$('#cBack').onclick = () => { cStop(); cGo(cCur - 1); };
+$('#cReset').onclick = () => { cStop(); cGo(0); };
+$('#cRail').onclick = e => { const b = e.target.closest('.phase'); if (!b || !C) return; cStop(); cGo(cSteps.findIndex(s => s.ph === +b.dataset.ph)); };
+document.addEventListener('keydown', e => {
+  if ($('#view-compare').hidden || /INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) return;
+  if (e.key === ' '){ e.preventDefault(); cPlay(); }
+  else if (e.key === 'ArrowRight'){ cStop(); cGo(cCur + 1); }
+  else if (e.key === 'ArrowLeft'){ cStop(); cGo(cCur - 1); }
+});
+fillCompareSelects();
+runCompare();
+
+renderSampleOptions();
+detectLive();
+</script>
+</body>
+</html>

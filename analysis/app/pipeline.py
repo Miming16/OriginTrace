@@ -4,6 +4,7 @@ import hashlib
 import re
 import subprocess
 import tempfile
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 
@@ -14,6 +15,7 @@ import tree_sitter_php
 import tree_sitter_python
 
 from .config import SUPPORTED_LANGUAGES
+from .logger import RunLog, new_run_id
 
 HASH_MASK = 0x7FFF_FFFF_FFFF_FFFF
 SOURCE_EXTENSIONS = {"c": {".c", ".h"}, "java": {".java"}, "python": {".py"}, "php": {".php"}}
@@ -165,7 +167,7 @@ def git_signals(root: Path, final_lines: int, enrolled_email: str | None = None)
     return signals, provenance_flags, metrics
 
 
-def analyze_directory(root: Path, language: str, overlap: float = 0.0, enrolled_email: str | None = None) -> dict:
+def analyze_directory(root: Path, language: str, overlap: float = 0.0, enrolled_email: str | None = None, log: RunLog | None = None) -> dict:
     language = validate_language(language)
     files = source_files(root, language)
     sources = {
@@ -178,20 +180,56 @@ def analyze_directory(root: Path, language: str, overlap: float = 0.0, enrolled_
         source = sources[path]
         filtered = remove_boilerplate(source)
         excluded += len(source.splitlines()) - len(filtered.splitlines())
-        fingerprints.extend({"file_path": path.relative_to(root).as_posix(), **fingerprint} for fingerprint in winnow(normalized_ast(filtered, language)))
+        file_fingerprints = winnow(normalized_ast(filtered, language))
+        fingerprints.extend({"file_path": path.relative_to(root).as_posix(), **fingerprint} for fingerprint in file_fingerprints)
+        if log:
+            log.write("file", path=path.relative_to(root).as_posix(), lines=len(source.splitlines()), fps=len(file_fingerprints))
     final_lines = sum(len(source.splitlines()) for source in sources.values())
     commit_flags, provenance_flags, commit_metrics = git_signals(root, final_lines, enrolled_email)
     risk_band_value = risk_band(overlap, commit_flags, provenance_flags)
+    if log:
+        log.write("files", count=len(files), lines=final_lines, boilerplate=excluded, fps=len(fingerprints))
+        log.write(
+            "git",
+            commits=commit_metrics["commit_count"],
+            days=commit_metrics["timespan_days"],
+            big_bang=commit_metrics["has_big_bang"],
+            low_entropy=commit_metrics["low_entropy_count"],
+            author_match=commit_metrics["author_committer_match_pct"],
+            signals=",".join(signal["signal_type"] for signal in commit_flags) or "-",
+            flags=",".join(flag["flag_type"] for flag in provenance_flags) or "-",
+        )
     return {"language": language, "files_included": len(files), "boilerplate_lines_excluded": excluded, "fingerprints": fingerprints, "commit_signals": commit_flags, "commit_metrics": commit_metrics, "provenance_flags": provenance_flags, "similarity_score": 0.0, "risk_band": risk_band_value}
 
 
-def analyze_git_url(url: str, language: str, enrolled_email: str | None = None) -> dict:
+def analyze_git_url(url: str, language: str, enrolled_email: str | None = None, run_id: str | None = None, log: RunLog | None = None, inspect: Callable[[Path], None] | None = None) -> dict:
+    """inspect, if given, is called with the clone folder after analysis and before the folder is deleted."""
     with tempfile.TemporaryDirectory() as directory:
         target = Path(directory) / "repository"
-        result = subprocess.run(["git", "clone", "--", url, str(target)], capture_output=True, text=True, timeout=60, check=False)
-        if result.returncode != 0:
-            raise ValueError("Repository could not be cloned")
-        return analyze_directory(target, language, enrolled_email=enrolled_email)
+        with RunLog("clone", run_id or new_run_id()) as clone_log:
+            clone_log.write("start", url=url, path=str(target))
+            try:
+                result = subprocess.run(["git", "clone", "--", url, str(target)], capture_output=True, text=True, timeout=60, check=False)
+            except subprocess.TimeoutExpired:
+                clone_log.write("fail", "E", error="clone took longer than 60s", ms=clone_log.ms())
+                raise
+            if result.returncode != 0:
+                git_error = " | ".join(line for line in result.stderr.splitlines() if line.strip() and not line.startswith("Cloning into"))
+                clone_log.write("fail", "E", rc=result.returncode, error=git_error, ms=clone_log.ms())
+                raise ValueError("Repository could not be cloned")
+            clone_log.write("done", ms=clone_log.ms(), **clone_summary(target))
+        result = analyze_directory(target, language, enrolled_email=enrolled_email, log=log)
+        if inspect:
+            inspect(target)
+        return result
+
+
+def clone_summary(target: Path) -> dict:
+    """Commit and size of a finished clone for the clone log (.git itself is not counted)."""
+    head = subprocess.run(["git", "-C", str(target), "rev-parse", "--short", "HEAD"], capture_output=True, text=True, timeout=10, check=False)
+    files = [path for path in target.rglob("*") if path.is_file() and ".git" not in path.relative_to(target).parts]
+    return {"head": head.stdout.strip() or "-", "files": len(files), "kb": sum(path.stat().st_size for path in files) // 1024}
+
 
 def risk_band(overlap: float, commit_signals: list[dict], provenance_flags: list[dict]) -> str:
     """Overlap sets the band. Commit and provenance findings are soft flags:
@@ -211,4 +249,4 @@ def risk_band(overlap: float, commit_signals: list[dict], provenance_flags: list
         return "medium"
     if soft and band == "medium":
         return "high"
-    return band
+    return band

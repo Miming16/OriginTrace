@@ -6,3 +6,6 @@ JWT_SECRET = os.getenv("JWT_SECRET", "development-only-secret")
 MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", str(25 * 1024 * 1024)))
 SELF_CHECK_LIMIT = int(os.getenv("SELF_CHECK_LIMIT", "3"))
 SUPPORTED_LANGUAGES = {"c", "java", "python", "php"}
+LOG_DIR = os.getenv("LOG_DIR", "logs")
+DEMO_MODE = os.getenv("DEMO_MODE", "0") == "1"
+VISUALIZER_DIR = os.getenv("VISUALIZER_DIR", "visualizer")
